@@ -1,0 +1,10 @@
+*.exe
+*.o
+*.obj
+*.out
+*.a
+*.log
+.vscode/
+.vs/
+Thumbs.db
+third_party/
