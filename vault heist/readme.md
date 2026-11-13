@@ -44,10 +44,10 @@ msbuild VaultHeist.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64 /p:Pr
 
 ## Controls
 
-- Click **Preorder**, **Inorder**, **Postorder**, or **Level order** to play a
-  traversal event batch.
+- Click a **Quiz** button to start that traversal challenge, then click rooms
+  in the requested order.
 - Click **Search 60** to show a sample BST search path.
-- Click **Reset demo** to restore the sample tree.
+- Click **Reset level** to restore the sample tree and counters.
 - Close the window to exit.
 
 ## Course restrictions

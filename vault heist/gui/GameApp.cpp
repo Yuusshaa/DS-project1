@@ -7,6 +7,14 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     windowHeight = 800;
     currentEvent = -1;
     highlightedNodeId = -1;
+    expectedIndex = 0;
+    alarmSteps = 0;
+    alarmCapacity = 10;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    challengeActive = false;
+    challengeFinished = false;
     eventTimer = 0.0f;
     message = "Starting demo";
 }
@@ -27,6 +35,9 @@ void GameApp::run() {
 }
 
 void GameApp::runAction(int action, int value, int secondValue) {
+    challengeActive = false;
+    challengeFinished = false;
+    expectedRoute.clear();
     events.clear();
     if (action == 0) {
         model.loadScenario(1, events);
@@ -34,10 +45,112 @@ void GameApp::runAction(int action, int value, int secondValue) {
         model.performAction(action, value, secondValue, events);
     }
     message = model.statusText();
+    alarmSteps = events.countAlarmSteps();
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
     currentEvent = events.size() > 0 ? 0 : -1;
     highlightedNodeId = -1;
     eventTimer = 0.0f;
     refreshView();
+}
+
+std::string GameApp::traversalName(int action) {
+    if (action == ACTION_TRAVERSE_PREORDER) return "preorder";
+    if (action == ACTION_TRAVERSE_INORDER) return "inorder";
+    if (action == ACTION_TRAVERSE_POSTORDER) return "postorder";
+    return "level order";
+}
+
+void GameApp::startTraversalChallenge(int action) {
+    events.clear();
+    if (model.performAction(action, 0, 0, events) == false) {
+        message = "Could not start traversal challenge";
+        return;
+    }
+
+    expectedRoute.clear();
+    for (int i = 0; i < events.size(); i++) {
+        Event& event = events.get(i);
+        if (event.type == EV_VISIT) {
+            expectedRoute.push(event.nodeId);
+        }
+    }
+
+    events.clear();
+    expectedIndex = 0;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    alarmCapacity = (3 * expectedRoute.size() + 1) / 2 + 2;
+    challengeActive = expectedRoute.size() > 0;
+    challengeFinished = false;
+    currentEvent = -1;
+    highlightedNodeId = -1;
+    message = "Act 1.1: click rooms in " + traversalName(action) + " order";
+}
+
+void GameApp::handleNodeClick(int id) {
+    if (challengeActive == false || challengeFinished == true) {
+        return;
+    }
+
+    if (expectedIndex < expectedRoute.size() &&
+        id == expectedRoute[expectedIndex]) {
+        Event event;
+        event.type = EV_VISIT;
+        event.nodeId = id;
+        int nodeIndex = findNodeIndex(id);
+        if (nodeIndex >= 0) {
+            event.value = view.treeNodes[nodeIndex].value;
+        }
+        events.add(event);
+        alarmSteps++;
+        expectedIndex++;
+        currentEvent = events.size() - 1;
+        highlightedNodeId = id;
+        eventTimer = 0.0f;
+
+        if (expectedIndex == expectedRoute.size()) {
+            challengeActive = false;
+            challengeFinished = true;
+            if (alarmSteps >= alarmCapacity) {
+                stars = 0;
+                message = "Alarm full. Level failed - reset and retry.";
+            } else if (wrongClicks == 0 && alarmSteps <= expectedRoute.size()) {
+                stars = 3;
+                message = "Level complete! 3 stars";
+            } else if (wrongClicks <= 1 &&
+                       alarmSteps * 4 <= expectedRoute.size() * 5) {
+                stars = 2;
+                message = "Level complete! 2 stars";
+            } else {
+                stars = 1;
+                message = "Level complete! 1 star";
+            }
+            score = 1000 - 10 * alarmSteps - wrongClicks;
+            if (score < 0) score = 0;
+            Event done;
+            done.type = EV_DONE;
+            events.add(done);
+        } else {
+            message = "Correct. Keep following the traversal order.";
+        }
+        return;
+    }
+
+    alarmSteps++;
+    wrongClicks++;
+    if (alarmSteps >= alarmCapacity) {
+        challengeActive = false;
+        challengeFinished = true;
+        stars = 0;
+        score = 0;
+        message = "Alarm full. Level failed - reset and retry.";
+    } else {
+        message = "Wrong room. +1 alarm step. Try again.";
+    }
 }
 
 void GameApp::refreshView() {
@@ -52,17 +165,25 @@ void GameApp::processInput() {
 
     Vector2 mouse = GetMousePosition();
     if (CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
-        runAction(ACTION_TRAVERSE_PREORDER, 0, 0);
+        startTraversalChallenge(ACTION_TRAVERSE_PREORDER);
     } else if (CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
-        runAction(ACTION_TRAVERSE_INORDER, 0, 0);
+        startTraversalChallenge(ACTION_TRAVERSE_INORDER);
     } else if (CheckCollisionPointRec(mouse, Rectangle{20, 182, 220, 42})) {
-        runAction(ACTION_TRAVERSE_POSTORDER, 0, 0);
+        startTraversalChallenge(ACTION_TRAVERSE_POSTORDER);
     } else if (CheckCollisionPointRec(mouse, Rectangle{20, 232, 220, 42})) {
-        runAction(ACTION_TRAVERSE_LEVEL_ORDER, 0, 0);
+        startTraversalChallenge(ACTION_TRAVERSE_LEVEL_ORDER);
     } else if (CheckCollisionPointRec(mouse, Rectangle{20, 282, 220, 42})) {
         runAction(ACTION_SEARCH, 60, 0);
     } else if (CheckCollisionPointRec(mouse, Rectangle{20, 332, 220, 42})) {
         runAction(0, 0, 0);
+    } else {
+        for (int i = 0; i < positions.size(); i++) {
+            Vector2 center = Vector2{positions[i].x, positions[i].y};
+            if (CheckCollisionPointCircle(mouse, center, 31.0f)) {
+                handleNodeClick(positions[i].id);
+                break;
+            }
+        }
     }
 }
 
@@ -86,7 +207,7 @@ void GameApp::draw() {
     BeginDrawing();
     ClearBackground(Color{18, 24, 36, 255});
     DrawText("VAULT HEIST", 24, 22, 30, Color{240, 220, 170, 255});
-    DrawText("Tree Lab - GUI mock connected through GameModel", 24, 54, 16,
+    DrawText("Tree Lab - GUI mock connected through GameModel", 285, 54, 16,
              Color{175, 190, 210, 255});
     DrawLine(260, 80, 260, windowHeight - 24, Color{62, 76, 96, 255});
 
@@ -99,9 +220,10 @@ void GameApp::draw() {
 }
 
 void GameApp::drawControls() {
-    DrawText("TRAVERSALS", 24, 55, 16, Color{150, 175, 205, 255});
+    DrawText("ACT 1.1 - TRAVERSAL", 24, 55, 16, Color{150, 175, 205, 255});
     std::string labels[6] = {
-        "Preorder", "Inorder", "Postorder", "Level order", "Search 60", "Reset demo"
+        "Quiz: Preorder", "Quiz: Inorder", "Quiz: Postorder", "Quiz: Level order",
+        "Search 60", "Reset level"
     };
     for (int i = 0; i < 6; i++) {
         int y = 82 + i * 50;
@@ -114,13 +236,20 @@ void GameApp::drawControls() {
 
     DrawText("ALARM", 24, 405, 15, Color{150, 175, 205, 255});
     DrawRectangle(24, 430, 210, 14, Color{58, 66, 78, 255});
-    int alarm = events.countAlarmSteps();
-    if (alarm > 10) alarm = 10;
-    DrawRectangle(24, 430, alarm * 21, 14, Color{216, 117, 73, 255});
-    DrawText(TextFormat("%i steps (mock)", events.countAlarmSteps()), 24, 451, 15,
+    int displayCapacity = alarmCapacity;
+    if (displayCapacity < 1) displayCapacity = 10;
+    int alarm = alarmSteps;
+    if (alarm > displayCapacity) alarm = displayCapacity;
+    int fillWidth = 210 * alarm / displayCapacity;
+    DrawRectangle(24, 430, fillWidth, 14, Color{216, 117, 73, 255});
+    DrawText(TextFormat("%i / %i steps", alarmSteps, displayCapacity), 24, 451, 15,
              Color{205, 212, 224, 255});
-    DrawText("Click an action to play its event batch.", 24, 500, 14,
+    DrawText(TextFormat("Correct: %i / %i", expectedIndex, expectedRoute.size()),
+             24, 477, 15, Color{205, 212, 224, 255});
+    DrawText(TextFormat("Wrong clicks: %i", wrongClicks), 24, 500, 15,
              Color{150, 165, 185, 255});
+    DrawText(TextFormat("Stars: %i   Score: %i", stars, score), 24, 525, 15,
+             Color{240, 220, 170, 255});
 }
 
 void GameApp::drawTree() {
