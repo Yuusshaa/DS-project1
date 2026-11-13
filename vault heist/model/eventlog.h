@@ -2,14 +2,14 @@
 
 Stores events in order, using your DynArray.
 Records them through log(...) and logChange(...).
-Counts the alarm, since countVisits() returns how many VISIT events happened.
+Counts alarm steps from VISIT and COMPARE events.
 Switches off for benchmarks through enabled = false, so nothing is stored.
 
 */
 
 #pragma once
 #include "dynamicarray.h"
-#include "Event.h"
+#include "event.h"
 
 class EventLog {
 public:
@@ -43,11 +43,11 @@ public:
         events.clear();
     }
 
-    // Alarm rule: every VISIT event costs +1.
-    int countVisits() {
+    // A visit or a comparison consumes one alarm step.
+    int countAlarmSteps() {
         int total = 0;
         for (int i = 0; i < events.size(); i++) {
-            if (events[i].type == EV_VISIT) {
+            if (events[i].type == EV_VISIT || events[i].type == EV_COMPARE) {
                 total = total + 1;
             }
         }

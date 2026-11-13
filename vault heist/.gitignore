@@ -8,3 +8,4 @@
 .vs/
 Thumbs.db
 third_party/
+build/
