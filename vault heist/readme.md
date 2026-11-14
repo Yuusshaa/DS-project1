@@ -60,7 +60,8 @@ for text and GUI work. AVL leaf height is 1; an empty child has height 0.
 
 ## Adding levels
 
-Level definitions live in `data/levels.json`. Add one flat object to its
+Level definitions live in `data/levels.json`. See
+`data/LEVEL_AUTHORING.md` for the level format and workflow. Add one flat object to its
 `levels` array with `act`, `number`, `title`, `concept`, `objective`, and
 `implemented`. `scenarioId`, `optimalSteps`, and `alarmCapacity` are optional;
 they default to scenario 1, the number of expected visits, and the calculated
