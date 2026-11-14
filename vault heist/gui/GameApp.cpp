@@ -5,6 +5,7 @@
 GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     windowWidth = 1280;
     windowHeight = 800;
+    screenState = 0;
     currentEvent = -1;
     highlightedNodeId = -1;
     expectedIndex = 0;
@@ -15,6 +16,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     score = 0;
     challengeActive = false;
     challengeFinished = false;
+    levelOneComplete = false;
     eventTimer = 0.0f;
     message = "Starting demo";
 }
@@ -22,7 +24,6 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
 void GameApp::run() {
     InitWindow(windowWidth, windowHeight, "Vault Heist - Tree Lab");
     SetTargetFPS(60);
-    runAction(0, 0, 0);
 
     while (!WindowShouldClose()) {
         float deltaTime = GetFrameTime();
@@ -134,6 +135,8 @@ void GameApp::handleNodeClick(int id) {
             Event done;
             done.type = EV_DONE;
             events.add(done);
+            levelOneComplete = stars > 0;
+            screenState = 3;
         } else {
             message = "Correct. Keep following the traversal order.";
         }
@@ -148,6 +151,8 @@ void GameApp::handleNodeClick(int id) {
         stars = 0;
         score = 0;
         message = "Alarm full. Level failed - reset and retry.";
+        levelOneComplete = false;
+        screenState = 3;
     } else {
         message = "Wrong room. +1 alarm step. Try again.";
     }
@@ -159,11 +164,48 @@ void GameApp::refreshView() {
 }
 
 void GameApp::processInput() {
+    if (IsKeyPressed(KEY_ESCAPE)) {
+        if (screenState == 2 || screenState == 3) {
+            screenState = 1;
+        } else if (screenState == 1) {
+            screenState = 0;
+        }
+        return;
+    }
+
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         return;
     }
 
     Vector2 mouse = GetMousePosition();
+    if (screenState == 0) {
+        if (CheckCollisionPointRec(mouse, Rectangle{490, 320, 300, 58})) {
+            screenState = 1;
+        }
+        return;
+    }
+
+    if (screenState == 1) {
+        if (CheckCollisionPointRec(mouse, Rectangle{80, 232, 350, 56})) {
+            runAction(0, 0, 0);
+            levelOneComplete = false;
+            screenState = 2;
+        } else if (CheckCollisionPointRec(mouse, Rectangle{24, 725, 180, 44})) {
+            screenState = 0;
+        }
+        return;
+    }
+
+    if (screenState == 3) {
+        if (CheckCollisionPointRec(mouse, Rectangle{390, 560, 220, 52})) {
+            runAction(0, 0, 0);
+            screenState = 2;
+        } else if (CheckCollisionPointRec(mouse, Rectangle{650, 560, 220, 52})) {
+            screenState = 1;
+        }
+        return;
+    }
+
     if (CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_PREORDER);
     } else if (CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
@@ -206,6 +248,22 @@ void GameApp::update(float deltaTime) {
 void GameApp::draw() {
     BeginDrawing();
     ClearBackground(Color{18, 24, 36, 255});
+    if (screenState == 0) {
+        drawMainMenu();
+        EndDrawing();
+        return;
+    }
+    if (screenState == 1) {
+        drawCampaignMap();
+        EndDrawing();
+        return;
+    }
+    if (screenState == 3) {
+        drawResultScreen();
+        EndDrawing();
+        return;
+    }
+
     DrawText("VAULT HEIST", 24, 22, 30, Color{240, 220, 170, 255});
     DrawText("Tree Lab - GUI mock connected through GameModel", 285, 54, 16,
              Color{175, 190, 210, 255});
@@ -217,6 +275,70 @@ void GameApp::draw() {
     DrawText(message.c_str(), 285, windowHeight - 42, 18,
              Color{220, 224, 230, 255});
     EndDrawing();
+}
+
+void GameApp::drawButton(Rectangle bounds, std::string label, bool enabled) {
+    Color fill = enabled ? Color{42, 57, 78, 255} : Color{31, 39, 52, 255};
+    Color outline = enabled ? Color{91, 113, 143, 255} : Color{62, 70, 82, 255};
+    Color text = enabled ? Color{230, 235, 242, 255} : Color{125, 133, 144, 255};
+    DrawRectangleRounded(bounds, 0.12f, 6, fill);
+    DrawRectangleLinesEx(bounds, 2.0f, outline);
+    DrawText(label.c_str(), (int)bounds.x + 18, (int)bounds.y + 17, 20, text);
+}
+
+void GameApp::drawMainMenu() {
+    DrawText("VAULT HEIST", 380, 170, 58, Color{240, 220, 170, 255});
+    DrawText("A data structures heist", 480, 240, 22, Color{175, 190, 210, 255});
+    drawButton(Rectangle{490, 320, 300, 58}, "Campaign", true);
+    drawButton(Rectangle{490, 394, 300, 58}, "Sandbox (in progress)", false);
+    DrawText("Choose a mode to enter the vault.", 474, 490, 18,
+             Color{150, 165, 185, 255});
+}
+
+void GameApp::drawCampaignMap() {
+    DrawText("CAMPAIGN MAP", 36, 28, 32, Color{240, 220, 170, 255});
+    DrawText("Complete each wing to unlock the next.", 38, 68, 18,
+             Color{175, 190, 210, 255});
+
+    drawButton(Rectangle{36, 122, 278, 72}, "ACT 1 - Blueprint Wing", true);
+    drawButton(Rectangle{346, 122, 278, 72}, "ACT 2 - Sorted Wing", false);
+    drawButton(Rectangle{656, 122, 278, 72}, "ACT 3 - Architect's Wing", false);
+    drawButton(Rectangle{966, 122, 278, 72}, "ACT 4 - Heap Fortress", false);
+
+    DrawText("ACT 1 LEVELS", 42, 207, 18, Color{150, 175, 205, 255});
+    drawButton(Rectangle{80, 232, 350, 56}, "1.1  Patrol Traversal", true);
+    drawButton(Rectangle{80, 302, 350, 56}, "1.2  Rebuild the Blueprint", false);
+    drawButton(Rectangle{80, 372, 350, 56}, "1.3  Height and Diameter", false);
+    drawButton(Rectangle{80, 442, 350, 56}, "1.4  Find the Meeting Room", false);
+    drawButton(Rectangle{80, 512, 350, 56}, "1.5  Mirror the Vault", false);
+
+    if (levelOneComplete) {
+        DrawText("Completed: 1.1", 490, 258, 20, Color{150, 205, 160, 255});
+    } else {
+        DrawText("Available now: 1.1", 490, 258, 20, Color{205, 212, 224, 255});
+    }
+    DrawText("More levels unlock as their model operations are integrated.",
+             490, 300, 17, Color{150, 165, 185, 255});
+    drawButton(Rectangle{24, 725, 180, 44}, "Main menu", true);
+}
+
+void GameApp::drawResultScreen() {
+    DrawText("LEVEL 1.1 RESULT", 380, 170, 36, Color{240, 220, 170, 255});
+    if (stars > 0) {
+        DrawText("Vault route completed", 430, 238, 24, Color{150, 205, 160, 255});
+    } else {
+        DrawText("The alarm caught you", 440, 238, 24, Color{220, 135, 115, 255});
+    }
+    DrawText(TextFormat("Stars: %i", stars), 490, 310, 22,
+             Color{240, 220, 170, 255});
+    DrawText(TextFormat("Score: %i", score), 490, 350, 22,
+             Color{220, 224, 230, 255});
+    DrawText(TextFormat("Alarm steps: %i / %i", alarmSteps, alarmCapacity),
+             490, 390, 20, Color{205, 212, 224, 255});
+    DrawText(TextFormat("Wrong clicks: %i", wrongClicks), 490, 425, 20,
+             Color{205, 212, 224, 255});
+    drawButton(Rectangle{390, 560, 220, 52}, "Retry level", true);
+    drawButton(Rectangle{650, 560, 220, 52}, "Campaign map", true);
 }
 
 void GameApp::drawControls() {

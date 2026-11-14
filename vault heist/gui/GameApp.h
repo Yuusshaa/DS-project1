@@ -26,6 +26,7 @@ private:
     std::string message;
     int windowWidth;
     int windowHeight;
+    int screenState; // 0=menu, 1=campaign, 2=level, 3=result
     int currentEvent;
     int highlightedNodeId;
     int expectedIndex;
@@ -36,11 +37,16 @@ private:
     int score;
     bool challengeActive;
     bool challengeFinished;
+    bool levelOneComplete;
     float eventTimer;
 
     void processInput();
     void update(float deltaTime);
     void draw();
+    void drawMainMenu();
+    void drawCampaignMap();
+    void drawResultScreen();
+    void drawButton(Rectangle bounds, std::string label, bool enabled);
     void runAction(int action, int value, int secondValue);
     void startTraversalChallenge(int action);
     void handleNodeClick(int id);
