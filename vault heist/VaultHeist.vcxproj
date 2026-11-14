@@ -23,6 +23,7 @@
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -30,6 +31,7 @@
     <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
@@ -84,16 +86,24 @@ copy /Y "$(RaylibRoot)\bin\glfw3.dll" "$(OutDir)"</Command>
     <ClCompile Include="gui\main.cpp" />
     <ClCompile Include="gui\GameApp.cpp" />
     <ClCompile Include="gui\MockGameModel.cpp" />
+    <ClCompile Include="gui\LevelManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gui\GameApp.h" />
     <ClInclude Include="gui\MockGameModel.h" />
+    <ClInclude Include="gui\LevelManager.h" />
     <ClInclude Include="model\GameModel.h" />
     <ClInclude Include="model\tree.h" />
     <ClInclude Include="model\Binarytree.h" />
     <ClInclude Include="model\dynamicarray.h" />
     <ClInclude Include="model\event.h" />
     <ClInclude Include="model\eventlog.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="data\levels.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="data\levels.json" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

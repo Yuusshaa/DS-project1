@@ -60,5 +60,11 @@ for text and GUI work. AVL leaf height is 1; an empty child has height 0.
 
 ## Adding levels
 
-Level format and authoring instructions will be added when the level data
-loader is implemented.
+Level definitions live in `data/levels.json`. Add one flat object to its
+`levels` array with `act`, `number`, `title`, `concept`, `objective`, and
+`implemented`. `scenarioId`, `optimalSteps`, and `alarmCapacity` are optional;
+they default to scenario 1, the number of expected visits, and the calculated
+alarm limit. Set `implemented` to `true` only after that level's model action
+and GUI flow are ready. The campaign unlocks implemented levels in order after
+the previous level earns at least one star. Progress is currently in memory
+for the current run and is not saved between launches.
