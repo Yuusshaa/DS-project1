@@ -32,6 +32,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     deleteChallenge = false;
     deleteCasePending = false;
     rangeChallenge = false;
+    balanceChallenge = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
@@ -66,6 +67,7 @@ void GameApp::runAction(int action, int value, int secondValue) {
     deleteChallenge = false;
     deleteCasePending = false;
     rangeChallenge = false;
+    balanceChallenge = false;
     expectedRoute.clear();
     events.clear();
     if (action == 0) {
@@ -73,7 +75,12 @@ void GameApp::runAction(int action, int value, int secondValue) {
     } else {
         model.performAction(action, value, secondValue, events);
     }
-    message = model.statusText();
+    bool degenerationLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
+        levelManager.getLevel(currentLevelIndex).act == 2 &&
+        levelManager.getLevel(currentLevelIndex).number == 5;
+    message = action == 0 && degenerationLevel
+        ? "Sorted deliveries create a one-sided BST. Search for the final treasure."
+        : model.statusText();
     alarmSteps = events.countAlarmSteps();
     wrongClicks = 0;
     stars = 0;
@@ -89,7 +96,17 @@ void GameApp::runAction(int action, int value, int secondValue) {
 void GameApp::loadCurrentLevel() {
     int scenarioId = 1;
     if (currentLevelIndex >= 0 && currentLevelIndex < levelManager.count()) {
-        scenarioId = levelManager.getLevel(currentLevelIndex).scenarioId;
+        LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
+        scenarioId = level.scenarioId;
+        if (level.act == 2 && level.number == 5) {
+            model.loadScenario(scenarioId, events);
+            for (int key = 10; key <= 70; key += 10) {
+                events.clear();
+                model.performAction(ACTION_INSERT, key, 0, events);
+            }
+            events.clear();
+            return;
+        }
     }
     model.loadScenario(scenarioId, events);
 }
@@ -106,6 +123,7 @@ void GameApp::startTraversalChallenge(int action) {
     insertChallenge = false;
     deleteChallenge = false;
     rangeChallenge = false;
+    balanceChallenge = false;
     events.clear();
     if (model.performAction(action, 0, 0, events) == false) {
         message = "Could not start traversal challenge";
@@ -149,6 +167,7 @@ void GameApp::startSearchChallenge(int target) {
     insertChallenge = false;
     deleteChallenge = false;
     rangeChallenge = false;
+    balanceChallenge = false;
     events.clear();
     if (!model.performAction(ACTION_SEARCH, target, 0, events)) {
         message = "Could not prepare the search challenge";
@@ -201,6 +220,7 @@ void GameApp::startInsertChallenge(int target) {
     insertChallenge = false;
     deleteChallenge = false;
     rangeChallenge = false;
+    balanceChallenge = false;
     copyViewData(view, challengeStartView);
     EventLog plannedEvents;
     if (!model.performAction(ACTION_INSERT, target, 0, plannedEvents)) {
@@ -269,6 +289,7 @@ void GameApp::startDeleteChallenge(int target) {
     deleteChallenge = false;
     deleteCasePending = false;
     rangeChallenge = false;
+    balanceChallenge = false;
     copyViewData(view, challengeStartView);
     int targetIndex = -1;
     for (int i = 0; i < view.treeNodes.size(); i++) {
@@ -424,6 +445,56 @@ void GameApp::startRangeChallenge(int low, int high) {
               std::to_string(high);
 }
 
+void GameApp::startBalanceChallenge() {
+    searchChallenge = false;
+    insertChallenge = false;
+    deleteChallenge = false;
+    deleteCasePending = false;
+    rangeChallenge = false;
+    balanceChallenge = false;
+    events.clear();
+    expectedRoute.clear();
+    expectedCompareCodes.clear();
+    balanceFound.clear();
+    for (int i = 0; i < view.treeNodes.size(); i++) {
+        ViewNode& node = view.treeNodes[i];
+        int leftHeight = 0;
+        int rightHeight = 0;
+        int leftIndex = findNodeIndex(node.leftId);
+        int rightIndex = findNodeIndex(node.rightId);
+        if (leftIndex >= 0) leftHeight = view.treeNodes[leftIndex].height;
+        if (rightIndex >= 0) rightHeight = view.treeNodes[rightIndex].height;
+        int balance = leftHeight - rightHeight;
+        if (balance > 1 || balance < -1) {
+            expectedRoute.push(node.id);
+            balanceFound.push(0);
+        }
+    }
+    if (expectedRoute.size() == 0) {
+        message = "No unbalanced rooms were supplied by this scenario";
+        return;
+    }
+    expectedIndex = 0;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    int optimalSteps = expectedRoute.size();
+    alarmCapacity = (3 * optimalSteps + 1) / 2 + 2;
+    if (currentLevelIndex >= 0 && currentLevelIndex < levelManager.count()) {
+        LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
+        if (level.alarmCapacity > 0) alarmCapacity = level.alarmCapacity;
+    }
+    balanceChallenge = true;
+    challengeActive = true;
+    challengeFinished = false;
+    currentEvent = -1;
+    nextEvent = 0;
+    animationPlaying = true;
+    highlightedNodeId = -1;
+    message = "Click every room whose balance factor is outside -1 to 1";
+}
+
 void GameApp::handleNodeClick(int id) {
     if (challengeActive == false || challengeFinished == true) {
         return;
@@ -512,6 +583,79 @@ void GameApp::handleNodeClick(int id) {
             screenState = 3;
         } else {
             message = "Wrong room. +1 alarm step. Follow the BST comparison path.";
+        }
+        return;
+    }
+
+    if (balanceChallenge) {
+        int foundIndex = -1;
+        for (int i = 0; i < expectedRoute.size(); i++) {
+            if (expectedRoute[i] == id && balanceFound[i] == 0) {
+                foundIndex = i;
+                break;
+            }
+        }
+        if (foundIndex >= 0) {
+            Event event;
+            event.type = EV_BALANCE_ALERT;
+            event.nodeId = id;
+            int nodeIndex = findNodeIndex(id);
+            if (nodeIndex >= 0) {
+                int leftHeight = 0;
+                int rightHeight = 0;
+                int leftIndex = findNodeIndex(view.treeNodes[nodeIndex].leftId);
+                int rightIndex = findNodeIndex(view.treeNodes[nodeIndex].rightId);
+                if (leftIndex >= 0) leftHeight = view.treeNodes[leftIndex].height;
+                if (rightIndex >= 0) rightHeight = view.treeNodes[rightIndex].height;
+                event.value = leftHeight - rightHeight;
+            }
+            events.add(event);
+            balanceFound[foundIndex] = 1;
+            alarmSteps++;
+            expectedIndex++;
+            currentEvent = events.size() - 1;
+            nextEvent = events.size();
+            highlightedNodeId = id;
+            if (expectedIndex == expectedRoute.size()) {
+                challengeActive = false;
+                challengeFinished = true;
+                int optimalSteps = expectedRoute.size();
+                if (currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
+                    levelManager.getLevel(currentLevelIndex).optimalSteps > 0) {
+                    optimalSteps = levelManager.getLevel(currentLevelIndex).optimalSteps;
+                }
+                if (alarmSteps >= alarmCapacity) stars = 0;
+                else if (wrongClicks == 0 && alarmSteps <= optimalSteps) stars = 3;
+                else if (wrongClicks <= 1 && alarmSteps * 4 <= optimalSteps * 5) stars = 2;
+                else stars = 1;
+                score = stars > 0 ? 1000 - 10 * alarmSteps - 50 * wrongClicks : 0;
+                if (score < 0) score = 0;
+                message = stars > 0 ? "All unbalanced rooms identified." :
+                                      "Alarm full. Level failed - retry.";
+                levelManager.recordResult(currentLevelIndex, stars, score);
+                levelManager.saveProgress("campaign_progress.dat");
+                Event done;
+                done.type = EV_DONE;
+                events.add(done);
+                screenState = 3;
+            } else {
+                message = "Unbalanced room found. Keep checking the badges.";
+            }
+        } else {
+            alarmSteps++;
+            wrongClicks++;
+            if (alarmSteps >= alarmCapacity) {
+                challengeActive = false;
+                challengeFinished = true;
+                stars = 0;
+                score = 0;
+                message = "Alarm full. Level failed - retry.";
+                levelManager.recordResult(currentLevelIndex, 0, 0);
+                levelManager.saveProgress("campaign_progress.dat");
+                screenState = 3;
+            } else {
+                message = "That room is balanced or already checked.";
+            }
         }
         return;
     }
@@ -769,7 +913,8 @@ void GameApp::processInput() {
 
     bool isSearchLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
-        levelManager.getLevel(currentLevelIndex).number == 1;
+        (levelManager.getLevel(currentLevelIndex).number == 1 ||
+         levelManager.getLevel(currentLevelIndex).number == 5);
     bool isInsertLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
         levelManager.getLevel(currentLevelIndex).number == 2;
@@ -779,6 +924,9 @@ void GameApp::processInput() {
     bool isRangeLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
         levelManager.getLevel(currentLevelIndex).number == 4;
+    bool isBalanceLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
+        levelManager.getLevel(currentLevelIndex).act == 3 &&
+        levelManager.getLevel(currentLevelIndex).number == 1;
     if (isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
         int target = levelManager.getLevel(currentLevelIndex).targetValue;
         startSearchChallenge(target);
@@ -808,22 +956,26 @@ void GameApp::processInput() {
         startRangeChallenge(level.rangeLow, level.rangeHigh);
     } else if (isRangeLevel && CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
         runAction(0, 0, 0);
-    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel &&
+    } else if (isBalanceLevel && CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
+        startBalanceChallenge();
+    } else if (isBalanceLevel && CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
+        runAction(0, 0, 0);
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel &&
                CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_PREORDER);
-    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel &&
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel &&
                CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_INORDER);
-    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel &&
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel &&
                CheckCollisionPointRec(mouse, Rectangle{20, 182, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_POSTORDER);
-    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel &&
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel &&
                CheckCollisionPointRec(mouse, Rectangle{20, 232, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_LEVEL_ORDER);
-    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel &&
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel &&
                CheckCollisionPointRec(mouse, Rectangle{20, 282, 220, 42})) {
         runAction(ACTION_SEARCH, 60, 0);
-    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel &&
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel &&
                CheckCollisionPointRec(mouse, Rectangle{20, 332, 220, 42})) {
         runAction(0, 0, 0);
     } else {
@@ -1044,6 +1196,20 @@ void GameApp::drawResultScreen() {
              490, 390, 20, Color{205, 212, 224, 255});
     DrawText(TextFormat("Wrong clicks: %i", wrongClicks), 490, 425, 20,
              Color{205, 212, 224, 255});
+    if (currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
+        levelManager.getLevel(currentLevelIndex).act == 2 &&
+        levelManager.getLevel(currentLevelIndex).number == 5) {
+        int height = 0;
+        for (int i = 0; i < view.treeNodes.size(); i++) {
+            if (view.treeNodes[i].parentId < 0) {
+                height = view.treeNodes[i].height;
+                break;
+            }
+        }
+        DrawText(TextFormat("Corridor height: %i for %i treasures. AVL trees stay balanced.",
+                            height, view.treeNodes.size()),
+                 315, 475, 18, Color{175, 190, 210, 255});
+    }
     drawButton(Rectangle{390, 560, 220, 52}, "Retry level", true);
     drawButton(Rectangle{650, 560, 220, 52}, "Campaign map", true);
 }
@@ -1051,7 +1217,8 @@ void GameApp::drawResultScreen() {
 void GameApp::drawControls() {
     bool isSearchLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
-        levelManager.getLevel(currentLevelIndex).number == 1;
+        (levelManager.getLevel(currentLevelIndex).number == 1 ||
+         levelManager.getLevel(currentLevelIndex).number == 5);
     bool isInsertLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
         levelManager.getLevel(currentLevelIndex).number == 2;
@@ -1061,19 +1228,28 @@ void GameApp::drawControls() {
     bool isRangeLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
         levelManager.getLevel(currentLevelIndex).number == 4;
-    if (isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel) {
+    bool isBalanceLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
+        levelManager.getLevel(currentLevelIndex).act == 3 &&
+        levelManager.getLevel(currentLevelIndex).number == 1;
+    if (isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel || isBalanceLevel) {
         LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
-        const char* heading = isSearchLevel ? "ACT 2.1 - BST SEARCH" :
+        bool degenerationLevel = levelManager.getLevel(currentLevelIndex).number == 5;
+        const char* heading = isSearchLevel
+            ? (degenerationLevel ? "ACT 2.5 - DEGENERATION" : "ACT 2.1 - BST SEARCH") :
                               isInsertLevel ? "ACT 2.2 - BST INSERT" :
                               isDeleteLevel ? "ACT 2.3 - BST DELETE" :
-                                              "ACT 2.4 - BST RANGE";
+                              isRangeLevel ? "ACT 2.4 - BST RANGE" :
+                                              "ACT 3.1 - BALANCE BADGES";
         DrawText(heading,
                  24, 55, 16, Color{150, 175, 205, 255});
         std::string startLabel = (isSearchLevel ? "Search " :
                                   isInsertLevel ? "Insert " :
                                   isDeleteLevel ? "Delete " : "Range ") +
                                  std::to_string(level.targetValue);
-        if (isRangeLevel) {
+        if (isBalanceLevel) {
+            drawButton(Rectangle{20, 82, 220, 42}, "Check badges", true);
+            drawButton(Rectangle{20, 132, 220, 42}, "Reset level", true);
+        } else if (isRangeLevel) {
             startLabel = "Range " + std::to_string(level.rangeLow) + "-" +
                          std::to_string(level.rangeHigh);
             drawButton(Rectangle{20, 82, 220, 42}, startLabel, true);
@@ -1098,7 +1274,7 @@ void GameApp::drawControls() {
         "Quiz: Preorder", "Quiz: Inorder", "Quiz: Postorder", "Quiz: Level order",
         "Search 60", "Reset level"
     };
-    for (int i = 0; i < ((isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel) ? 0 : 6); i++) {
+    for (int i = 0; i < ((isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel || isBalanceLevel) ? 0 : 6); i++) {
         int y = 82 + i * 50;
         DrawRectangleRounded(Rectangle{20, (float)y, 220, 42}, 0.15f, 6,
                              Color{42, 57, 78, 255});
@@ -1166,6 +1342,26 @@ void GameApp::drawTree() {
         std::string label = std::to_string(node.value);
         DrawText(label.c_str(), (int)positions[p].x - 15,
                  (int)positions[p].y - 9, 18, Color{255, 255, 255, 255});
+        bool showBalanceBadges = currentLevelIndex >= 0 &&
+            currentLevelIndex < levelManager.count() &&
+            levelManager.getLevel(currentLevelIndex).act == 3 &&
+            levelManager.getLevel(currentLevelIndex).number == 1;
+        if (showBalanceBadges) {
+            int leftHeight = 0;
+            int rightHeight = 0;
+            int leftIndex = findNodeIndex(node.leftId);
+            int rightIndex = findNodeIndex(node.rightId);
+            if (leftIndex >= 0) leftHeight = view.treeNodes[leftIndex].height;
+            if (rightIndex >= 0) rightHeight = view.treeNodes[rightIndex].height;
+            int balance = leftHeight - rightHeight;
+            Color badge = balance > 1 || balance < -1
+                ? Color{205, 95, 78, 255} : Color{65, 145, 105, 255};
+            DrawRectangle((int)positions[p].x - 21, (int)positions[p].y + 33,
+                          42, 20, badge);
+            DrawText(TextFormat("BF %i", balance),
+                     (int)positions[p].x - 18, (int)positions[p].y + 36,
+                     11, Color{255, 255, 255, 255});
+        }
         if (node.id == hoveredNodeId) {
             int leftHeight = 0;
             int rightHeight = 0;

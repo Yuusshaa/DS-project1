@@ -10,9 +10,9 @@
     {"act": 2, "number": 2, "title": "Stash Loot", "concept": "BST insertion", "objective": "Follow the comparison path to insert treasure 65.", "scenarioId": 1, "targetValue": 65, "optimalSteps": 3, "alarmCapacity": 7, "implemented": true},
     {"act": 2, "number": 3, "title": "Steal and Collapse", "concept": "BST deletion", "objective": "Identify the two-child case, then delete treasure 70.", "scenarioId": 1, "targetValue": 70, "optimalSteps": 2, "alarmCapacity": 5, "implemented": true},
     {"act": 2, "number": 4, "title": "Range Raid", "concept": "BST range query", "objective": "Find keys 60 through 70 while pruning subtrees.", "scenarioId": 1, "rangeLow": 60, "rangeHigh": 70, "optimalSteps": 2, "alarmCapacity": 5, "implemented": true},
-    {"act": 2, "number": 5, "title": "Lazy Architect", "concept": "BST degeneration", "objective": "Search a deliberately skewed tree.", "implemented": false},
+    {"act": 2, "number": 5, "title": "Lazy Architect", "concept": "BST degeneration", "objective": "Search treasure 70 in a corridor formed by sorted deliveries.", "scenarioId": 25, "targetValue": 70, "optimalSteps": 7, "alarmCapacity": 13, "implemented": true},
 
-    {"act": 3, "number": 1, "title": "Read the Badges", "concept": "AVL balance factor", "objective": "Identify every unbalanced room.", "implemented": false},
+    {"act": 3, "number": 1, "title": "Read the Badges", "concept": "AVL balance factor", "objective": "Identify every room with a balance factor outside -1 to 1.", "scenarioId": 31, "optimalSteps": 2, "alarmCapacity": 5, "implemented": true},
     {"act": 3, "number": 2, "title": "Single Rotations", "concept": "LL and RR rotations", "objective": "Choose the pivot and repair the tree.", "implemented": false},
     {"act": 3, "number": 3, "title": "Double Rotations", "concept": "LR and RL rotations", "objective": "Identify and perform the two rotations.", "implemented": false},
     {"act": 3, "number": 4, "title": "Auto Balance", "concept": "AVL insertion", "objective": "Predict and observe automatic rebalancing.", "implemented": false},

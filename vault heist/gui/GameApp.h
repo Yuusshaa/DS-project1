@@ -30,6 +30,7 @@ private:
     DynArray<int> expectedRoute;
     DynArray<int> expectedCompareCodes;
     DynArray<int> skippedSubtreeRoots;
+    DynArray<int> balanceFound;
     DynArray<GuiNodePosition> positions;
     std::string message;
     std::string sandboxValueInput;
@@ -65,6 +66,7 @@ private:
     bool deleteChallenge;
     bool deleteCasePending;
     bool rangeChallenge;
+    bool balanceChallenge;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
@@ -83,6 +85,7 @@ private:
     void startInsertChallenge(int target);
     void startDeleteChallenge(int target);
     void startRangeChallenge(int low, int high);
+    void startBalanceChallenge();
     void selectDeleteCase(int selectedCase);
     void handleNodeClick(int id);
     std::string traversalName(int action);

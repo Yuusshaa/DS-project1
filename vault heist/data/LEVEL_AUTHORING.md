@@ -29,6 +29,12 @@ nested objects or arrays inside a level.
 - `objective`: player-facing instruction.
 - `scenarioId`: ID passed to `GameModel::loadScenario`. Agree on its meaning
   with the model owner; the JSON number alone does not create a scenario.
+  Scenario `25` is reserved for Act 2.5: it must load an empty BST so the GUI
+  can insert keys `10, 20, 30, 40, 50, 60, 70` in sorted order and create the
+  deliberately right-skewed search corridor.
+  Scenario `31` is reserved for Act 3.1: it must load a fixed, deterministic
+  five-node tree (50 with children 30 and 70; 30 -> 20 -> 10 on the left) whose
+  balance factor is +2 at 50 and +2 at 30. Heights follow the leaf = 1 rule.
 - `targetValue`: optional target for levels that search or compare a key.
 - `rangeLow` and `rangeHigh`: optional inclusive range bounds for range-query
   levels.

@@ -98,8 +98,37 @@ void MockGameModel::addVisit(int id, EventLog& events) {
 }
 
 bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
-    (void)scenarioId;
     view.clear();
+    if (scenarioId == 25) {
+        view.viewType = MODEL_VIEW_TREE;
+        message = "Empty BST loaded for the degeneration challenge";
+        events.clear();
+        return true;
+    }
+
+    if (scenarioId == 31) {
+        ViewNode node;
+        node.id = 1; node.value = 50; node.leftId = 2; node.rightId = 3;
+        node.parentId = -1;
+        view.treeNodes.push(node);
+        node = ViewNode();
+        node.id = 2; node.value = 30; node.leftId = 4; node.parentId = 1;
+        view.treeNodes.push(node);
+        node = ViewNode();
+        node.id = 3; node.value = 70; node.parentId = 1;
+        view.treeNodes.push(node);
+        node = ViewNode();
+        node.id = 4; node.value = 20; node.leftId = 5; node.parentId = 2;
+        view.treeNodes.push(node);
+        node = ViewNode();
+        node.id = 5; node.value = 10; node.parentId = 4;
+        view.treeNodes.push(node);
+        view.viewType = MODEL_VIEW_TREE;
+        refreshMetadata();
+        message = "Mock AVL challenge tree loaded";
+        events.clear();
+        return true;
+    }
 
     ViewNode node;
     node.id = 1; node.value = 50; node.leftId = 2; node.rightId = 3;
