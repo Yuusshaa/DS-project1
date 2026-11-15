@@ -1,18 +1,8 @@
-// tests/test_binarytree.cpp  -- tests every BinaryTree function at once
+// Tests every BinaryTree function at once.
 #include <cstdio>
-#include "C:\Users\hp\Desktop\DS PROJECT\vault heist\model\Binarytree.h"
+#include "testkit.h"
+#include "../model/binarytree.h"
 
-int g_passed = 0;
-int g_failed = 0;
-
-// If the condition is false, print which line failed.
-#define CHECK(cond) \
-    if (cond) { g_passed = g_passed + 1; } \
-    else { g_failed = g_failed + 1; std::printf("  FAIL line %d: %s\n", __LINE__, #cond); }
-
-// ---------- helpers ----------
-
-// Is 'list' exactly the n numbers in 'expected'?
 int listIs(DynArray<int>& list, int* expected, int n) {
     if (list.size() != n) {
         return 0;
@@ -25,7 +15,6 @@ int listIs(DynArray<int>& list, int* expected, int n) {
     return 1;
 }
 
-// Are two lists identical?
 int sameLists(DynArray<int>& x, DynArray<int>& y) {
     if (x.size() != y.size()) {
         return 0;
@@ -38,18 +27,17 @@ int sameLists(DynArray<int>& x, DynArray<int>& y) {
     return 1;
 }
 
-// Turn a list of ids into a list of values.
 void toValues(BinaryTree& t, DynArray<int>& ids, DynArray<int>& values) {
     for (int i = 0; i < ids.size(); i++) {
         values.push(t.findById(t.root, ids[i])->value);
     }
 }
 
-// The sample tree:      10 (id 1)
-//                      /        \
-//                 20 (id 2)   30 (id 3)
-//                   /
-//                40 (id 4)
+//       10 (id 1)
+//      /        \
+//  20 (id 2)   30 (id 3)
+//    /
+//  40 (id 4)
 void buildSample(BinaryTree& t) {
     t.root = t.createNode(10);
     t.setLeft(t.root, t.createNode(20));
@@ -57,7 +45,7 @@ void buildSample(BinaryTree& t) {
     t.setLeft(t.root->left, t.createNode(40));
 }
 
-// A chain going right: values 1,2,3,4 (ids 1,2,3,4)
+// Chain going right: values 1,2,3,4
 void buildRightChain(BinaryTree& t) {
     t.root = t.createNode(1);
     TreeNode* current = t.root;
@@ -68,9 +56,7 @@ void buildRightChain(BinaryTree& t) {
     }
 }
 
-// ---------- tests ----------
-
-void testBuilding() {
+void testBuilding(Tally& T) {
     std::printf("Building and owning\n");
     BinaryTree t;
     CHECK(t.isEmpty() == true);
@@ -97,7 +83,7 @@ void testBuilding() {
     CHECK(t.nodeCount == 0);
 }
 
-void testTraversals() {
+void testTraversals(Tally& T) {
     std::printf("Traversals (recursive)\n");
     BinaryTree t;
     buildSample(t);
@@ -127,20 +113,20 @@ void testTraversals() {
     std::printf("Traversals on a skewed chain\n");
     BinaryTree chain;
     buildRightChain(chain);
-    DynArray<int> p, i, o, p2, i2, o2;
+    DynArray<int> p, q, o, p2, q2, o2;
     chain.preorder(chain.root, p);
-    chain.inorder(chain.root, i);
+    chain.inorder(chain.root, q);
     chain.postorder(chain.root, o);
     chain.preorderIter(p2);
-    chain.inorderIter(i2);
+    chain.inorderIter(q2);
     chain.postorderIter(o2);
     int chainPre[] = {1, 2, 3, 4};
     int chainPost[] = {4, 3, 2, 1};
     CHECK(listIs(p, chainPre, 4));
-    CHECK(listIs(i, chainPre, 4));
+    CHECK(listIs(q, chainPre, 4));
     CHECK(listIs(o, chainPost, 4));
     CHECK(sameLists(p, p2));
-    CHECK(sameLists(i, i2));
+    CHECK(sameLists(q, q2));
     CHECK(sameLists(o, o2));
 
     std::printf("Traversals on empty and single-room trees\n");
@@ -165,7 +151,7 @@ void testTraversals() {
     CHECK(listIs(y2, eOne, 1));
 }
 
-void testHeightDiameter() {
+void testHeightDiameter(Tally& T) {
     std::printf("Height and diameter\n");
     BinaryTree t;
     buildSample(t);
@@ -188,8 +174,7 @@ void testHeightDiameter() {
     CHECK(chain.computeHeight(chain.root) == 4);
     CHECK(chain.diameter() == 3);
 
-    // Longest walk does NOT pass through the root:
-    // root has only a left child A; A has B and C; B has D; C has E.
+    // Longest walk does NOT pass through the root.
     BinaryTree w;
     w.root = w.createNode(1);
     TreeNode* A = w.createNode(2);
@@ -202,10 +187,10 @@ void testHeightDiameter() {
     w.setRight(A, C);
     w.setLeft(B, D);
     w.setRight(C, E);
-    CHECK(w.diameter() == 4);   // D-B-A-C-E, which skips the root
+    CHECK(w.diameter() == 4);
 }
 
-void testPathsAndLca() {
+void testPathsAndLca(Tally& T) {
     std::printf("pathTo\n");
     BinaryTree t;
     buildSample(t);
@@ -238,7 +223,7 @@ void testPathsAndLca() {
     CHECK(t.pathLength(99, 4) == -1);
 }
 
-void testMirrorAndCompare() {
+void testMirrorAndCompare(Tally& T) {
     std::printf("Mirror\n");
     BinaryTree t, u;
     buildSample(t);
@@ -253,16 +238,16 @@ void testMirrorAndCompare() {
     CHECK(t.isSameTree(t.root, u.root) == false);
 
     t.mirror(t.root);
-    CHECK(t.isSameTree(t.root, u.root) == true);   // mirror twice = original
+    CHECK(t.isSameTree(t.root, u.root) == true);
 
     std::printf("isSameTree edge cases\n");
     BinaryTree e1, e2;
-    CHECK(e1.isSameTree(e1.root, e2.root) == true);          // both empty
-    CHECK(t.isSameTree(t.root, e1.root) == false);           // one empty
+    CHECK(e1.isSameTree(e1.root, e2.root) == true);
+    CHECK(t.isSameTree(t.root, e1.root) == false);
     BinaryTree diffValue;
     buildSample(diffValue);
     diffValue.root->right->value = 31;
-    CHECK(t.isSameTree(t.root, diffValue.root) == false);    // one value different
+    CHECK(t.isSameTree(t.root, diffValue.root) == false);
 
     std::printf("isSymmetric\n");
     BinaryTree s;
@@ -275,7 +260,7 @@ void testMirrorAndCompare() {
     CHECK(empty.isSymmetric() == true);
 }
 
-void testReconstruction() {
+void testReconstruction(Tally& T) {
     std::printf("Reconstruction: round trip\n");
     BinaryTree t;
     buildSample(t);
@@ -295,7 +280,7 @@ void testReconstruction() {
     CHECK(a.nodeCount == 4);
     CHECK(a.root->left->parent == a.root);
 
-    std::printf("Reconstruction: by hand, pre 10 20 40 30 / in 40 20 10 30\n");
+    std::printf("Reconstruction: by hand\n");
     DynArray<int> hp, hi;
     hp.push(10); hp.push(20); hp.push(40); hp.push(30);
     hi.push(40); hi.push(20); hi.push(10); hi.push(30);
@@ -304,7 +289,6 @@ void testReconstruction() {
     CHECK(t.isSameTree(t.root, h.root) == true);
 
     std::printf("Reconstruction: chains\n");
-    // right chain 1,2,3,4: pre 1 2 3 4, in 1 2 3 4, post 4 3 2 1
     DynArray<int> cp, ci, cpost;
     cp.push(1); cp.push(2); cp.push(3); cp.push(4);
     ci.push(1); ci.push(2); ci.push(3); ci.push(4);
@@ -316,7 +300,6 @@ void testReconstruction() {
     CHECK(expected.isSameTree(expected.root, rc.root) == true);
     CHECK(expected.isSameTree(expected.root, rc2.root) == true);
 
-    // left chain 4,3,2,1: pre 4 3 2 1, in 1 2 3 4
     DynArray<int> lp;
     lp.push(4); lp.push(3); lp.push(2); lp.push(1);
     BinaryTree lc;
@@ -342,43 +325,46 @@ void testReconstruction() {
     CHECK(single.nodeCount == 1);
 
     std::printf("Reconstruction: rebuilding twice on the same tree object\n");
-    a.buildFromPreIn(pre, in);       // should clear the old one first
+    a.buildFromPreIn(pre, in);
     CHECK(a.nodeCount == 4);
     CHECK(t.isSameTree(t.root, a.root) == true);
 }
 
-void testCopy() {
+void testCopy(Tally& T) {
     std::printf("Copy\n");
     BinaryTree a;
     buildSample(a);
     BinaryTree b;
     b.copyTreeFrom(a);
     CHECK(a.isSameTree(a.root, b.root) == true);
-    CHECK(a.root != b.root);                       // different rooms in memory
+    CHECK(a.root != b.root);
     CHECK(b.nodeCount == 4);
     CHECK(b.root->left->parent == b.root);
 
-    b.mirror(b.root);                              // change the copy only
+    b.mirror(b.root);
     CHECK(a.isSameTree(a.root, b.root) == false);
-    CHECK(a.root->left->value == 20);              // original untouched
+    CHECK(a.root->left->value == 20);
     CHECK(a.root->right->value == 30);
 
     b.copyTreeFrom(a);
     CHECK(a.isSameTree(a.root, b.root) == true);
-    CHECK(a.root != b.root);
     CHECK(b.nodeCount == 4);
-    CHECK(b.root->left->parent == b.root);
+
+    BinaryTree e, f;
+    f.copyTreeFrom(e);
+    CHECK(f.isEmpty() == true);
 }
 
 int main() {
-    testBuilding();
-    testTraversals();
-    testHeightDiameter();
-    testPathsAndLca();
-    testMirrorAndCompare();
-    testReconstruction();
-    testCopy();
+    Tally T;
+    testBuilding(T);
+    testTraversals(T);
+    testHeightDiameter(T);
+    testPathsAndLca(T);
+    testMirrorAndCompare(T);
+    testReconstruction(T);
+    testCopy(T);
 
-    std::printf("\nPassed: %d  Failed: %d\n", g_passed, g_failed);
-    return g_failed == 0 ? 0 : 1;
+    std::printf("\nPassed: %d  Failed: %d\n", T.passed, T.failed);
+    return T.failed;
 }

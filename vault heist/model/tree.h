@@ -1,4 +1,4 @@
-//this is supposed to be a tree node and its corresponding functions
+// One binary-tree node and helpers for reading its stored metadata.
 #pragma once
 
 struct TreeNode {
@@ -7,8 +7,8 @@ struct TreeNode {
     TreeNode* left;    // left child, or 0 if none
     TreeNode* right;   // right child, or 0 if none
     TreeNode* parent;  // parent, or 0 if this is the root
-    int height;        // leaf = 1, empty spot = 0 (our DECISIONS.md rule)
-    int size;          // number of rooms in this subtree, leaf = 1
+    int height;        // Subtree height: leaf = 1, empty child = 0.
+    int size;          // Number of nodes in this subtree.
 
     TreeNode(int newId, int newValue) {
         id = newId;

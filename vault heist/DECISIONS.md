@@ -32,3 +32,6 @@ different rule, update this file and both halves of the code together.
 ## GUI
 
 - GUI framework: Raylib.
+- IDE/build: Visual Studio Community 2026, x64, MSBuild, C++20; no CMake.
+- Raylib is supplied by the existing vcpkg installation under
+  `E:\vcpkg\installed\x64-windows`.

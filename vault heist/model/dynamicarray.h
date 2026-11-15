@@ -1,4 +1,4 @@
-// cannot use vectors so were making our own hussain
+// A small growable array used instead of an STL container.
 #pragma once
 
 template <typename T>
@@ -8,7 +8,7 @@ private:
     int count;      // how many items are stored right now
     int capacity;   // how many items fit before we must grow
 
-    //aloocates new memory by copying old data into the new one and deleting the old memory so basically we have two shi
+    // Double the capacity while keeping all existing elements.
     void grow() {
         int newCapacity = capacity * 2;
         T* newData = new T[newCapacity];
@@ -21,7 +21,7 @@ private:
     }
 
 public:
-    // start w a size of 8
+    // Start with room for eight elements.
     DynArray() {
         capacity = 8;
         count = 0;
@@ -33,7 +33,7 @@ public:
         delete[] data;
     }
 
-    // Copy constructor: makes a brand new memory block with its own copy of the items.
+    // Copy the elements into independently owned storage.
     DynArray(DynArray& other) {
         capacity = other.capacity;
         count = other.count;
@@ -43,10 +43,12 @@ public:
         }
     }
 
-    // Copy assignment: a = b
+    // Replace this array's contents with a copy of another array.
     DynArray& operator=(DynArray& other) {
-        if (this == &other) return *this;   // a = a: do nothing
-        delete[] data;                      // free what we had
+        if (this == &other) {
+            return *this;
+        }
+        delete[] data;
         capacity = other.capacity;
         count = other.count;
         data = new T[capacity];
@@ -56,7 +58,7 @@ public:
         return *this;
     }
 
-    // Add an item to the end.
+    // Append an item, growing the array when it is full.
     void push(T item) {
         if (count == capacity) {
             grow();
@@ -65,7 +67,7 @@ public:
         count++;
     }
 
-    // Remove and return the last item. On an empty array, returns a default value.
+    // Remove and return the last item, or a default value when empty.
     T pop() {
         if (count == 0) {
             return T();
@@ -74,20 +76,25 @@ public:
         return data[count];
     }
 
-    // Access by index: a[3]
+    // Access an element by index.
     T& operator[](int i) {
         return data[i];
     }
 
-    int size() {
+    // Read an element without allowing it to be changed.
+    const T& operator[](int i) const {
+        return data[i];
+    }
+
+    int size() const {
         return count;
     }
 
-    bool empty() {
+    bool empty() const {
         return count == 0;
     }
 
-    // Forget all items. The memory stays, so pushing again is fast.
+    // Remove all elements while keeping the allocated storage.
     void clear() {
         count = 0;
     }

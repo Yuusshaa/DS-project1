@@ -1,0 +1,61 @@
+Vault Heist Section 10 Benchmarks
+
+1. HEIGHT COMPARISON
+Sorted BST input is capped at 5000 nodes to avoid excessive recursion.
+input,n,BST_height,AVL_height
+random,100,14,8
+sorted,100,100,7
+random,1000,20,12
+sorted,1000,1000,10
+random,10000,32,16
+sorted,5000,5000,13
+
+2. SEARCH COST (10000 searches per tree)
+input,n,BST_avg_comparisons,BST_seconds,AVL_avg_comparisons,AVL_seconds
+random,100,7.441,0.003000,5.865,0.001000
+sorted,100,49.953,0.014000,5.817,0.001000
+random,1000,11.086,0.003000,9.143,0.003000
+sorted,1000,495.783,0.126000,9.008,0.003000
+random,10000,16.802,0.006000,12.594,0.005000
+sorted,5000,2422.183,0.879000,11.360,0.004000
+
+3. AVL ROTATION COUNTS (n=10000)
+input,insert_avg_rotations,delete_avg_rotations,max_delete_rotations
+random,0.466500,0.158500,3
+sorted,0.998600,0.498800,1
+
+4. ORDER STATISTICS (1000 queries on n=10000)
+structure,queries,seconds,checksum
+BST_inorder_scan,1000,0.099000,4991500
+AVL_subtree_sizes,1000,0.000000,4991500
+
+5. HEAP CONSTRUCTION
+input,n,seconds,comparisons
+random,100,0.000000,175
+ascending,100,0.000000,190
+random,1000,0.000000,1869
+ascending,1000,0.000000,1982
+random,10000,0.002000,18771
+ascending,10000,0.000000,19982
+
+6. HEAP SORT
+input,n,seconds,comparisons,swaps,sorted
+random,1000,0.000000,16866,9089,yes
+ascending,1000,0.001000,17583,9708,yes
+reverse,1000,0.000000,15965,8316,yes
+duplicates,1000,0.000000,15788,8247,yes
+random,10000,0.004000,235341,124139,yes
+ascending,10000,0.007000,244460,131956,yes
+reverse,10000,0.004000,226682,116696,yes
+duplicates,10000,0.004000,218070,112771,yes
+
+7. SORTING COMPARISON (random input)
+algorithm,n,seconds,comparisons,moves_or_swaps,auxiliary_ints,sorted
+insertion,1000,0.000000,257564,257566,0,yes
+merge,1000,0.000000,8700,19952,1000,yes
+quick,1000,0.000000,13360,2329,0,yes
+heap,1000,0.000000,16842,9089,0,yes
+insertion,10000,0.045000,25777202,25777207,0,yes
+merge,10000,0.002000,120432,267232,10000,yes
+quick,10000,0.000000,179189,30754,0,yes
+heap,10000,0.005000,235336,124110,0,yes

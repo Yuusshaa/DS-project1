@@ -19,7 +19,7 @@ public:
         clear();
     }
 
-    // dont accidently create shallow copies ikik im smart type shi
+    // Tree nodes are owned by this object, so shallow copies are not allowed.
     BinaryTree(BinaryTree& other) = delete;
     BinaryTree& operator=(BinaryTree& other) = delete;
 
@@ -83,8 +83,7 @@ public:
         return root == 0;
     }
 
-    //all the traversles after this so dont get it mixed up
-    //result are the stored place(were also using the push and pop made in dynamic array headerfile)
+    // Recursive traversals append node IDs to the supplied result array.
 
     // node, left, right
     void preorder(TreeNode* node, DynArray<int>& result) {
@@ -124,7 +123,7 @@ public:
         DynArray<TreeNode*> queue;
         int head = 0; 
         queue.push(root);
-        //basically made our own queue which can only push )
+        // Use an index as the queue front so processed entries need not be shifted.
         while (head < queue.size()) {
             TreeNode* current = queue[head];
             head = head + 1; 
@@ -149,7 +148,7 @@ public:
         while (stack.empty() == false) {
             TreeNode* current = stack.pop();
             result.push(current->id);
-            // push pehla push krraha bcz while popping left pehla aega im so smart 
+            // Push right first so the left child is processed first.
             if (current->right != 0) {
                 stack.push(current->right);
             }
@@ -182,7 +181,7 @@ public:
         if (root == 0) {
             return;
         }
-        // were do node, right, left, then reverse it.
+        // Collect node-right-left order, then reverse it to get postorder.
         DynArray<TreeNode*> stack;
         DynArray<int> backwards;
         stack.push(root);
@@ -297,7 +296,7 @@ public:
         int depthMeet = pathMeet.size() - 1;
         return depthA + depthB - 2 * depthMeet;
     }
-        // ---------- Mirror and comparison ----------
+    // ---------- Mirror and comparison ----------
 
     // Swap left and right children of every room under 'node'.
     void mirror(TreeNode* node) {
@@ -349,10 +348,7 @@ public:
 
 
 
-    //build a tree using preoder + postorder
-
-
-    // Builds a tree from a preorder list and an inorder list.
+    // Reconstruct from preorder and inorder lists; values must be unique.
     TreeNode* buildpre(DynArray<int>& pre, DynArray<int>& in) {
         if (pre.size() == 0) {
             return 0;                       // no numbers = no room
@@ -393,8 +389,7 @@ public:
         root = buildpre(pre, in);
     }
 
-    // Builds a tree from a postorder list and an inorder list.
-    // Same idea, but the root is the LAST postorder number.
+    // Reconstruct from postorder and inorder lists; values must be unique.
     TreeNode* buildpost(DynArray<int>& post, DynArray<int>& in) {
         if (post.size() == 0) {
             return 0;
@@ -432,9 +427,7 @@ public:
         root = buildpost(post, in);
     }
         
-    //tree copier
-
-    // Makes a brand new room for every room under node.
+    // Create an independent copy of the subtree rooted at node.
     TreeNode* copyFrom(TreeNode* node) {
         if (node == 0) {
             return 0;                          // nothing to copy
@@ -447,7 +440,7 @@ public:
         return fresh;
     }
 
-    // Make THIS tree a copy of any other tree 
+    // Replace this tree with an independent copy of another tree.
     void copyTreeFrom(BinaryTree& other) {
         clear();
         root = copyFrom(other.root);
