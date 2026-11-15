@@ -31,6 +31,7 @@ void GameApp::run() {
     InitWindow(windowWidth, windowHeight, "Vault Heist - Tree Lab");
     SetTargetFPS(60);
     if (levelManager.loadFromJson("data/levels.json")) {
+        levelManager.loadProgress("campaign_progress.dat");
         currentLevelIndex = levelManager.findLevel(1, 1);
     } else {
         message = "Could not load data/levels.json";
@@ -212,6 +213,7 @@ void GameApp::handleNodeClick(int id) {
                           targetFound ? "Alarm full. Level failed - retry." :
                                         "Target was not found. Level failed - retry.";
                 levelManager.recordResult(currentLevelIndex, stars, score);
+                levelManager.saveProgress("campaign_progress.dat");
                 Event done;
                 done.type = EV_DONE;
                 events.add(done);
@@ -234,6 +236,7 @@ void GameApp::handleNodeClick(int id) {
             score = 0;
             message = "Alarm full. Level failed - retry.";
             levelManager.recordResult(currentLevelIndex, 0, 0);
+            levelManager.saveProgress("campaign_progress.dat");
             screenState = 3;
         } else {
             message = "Wrong room. +1 alarm step. Follow the BST comparison path.";
@@ -283,6 +286,7 @@ void GameApp::handleNodeClick(int id) {
             score = 1000 - 10 * alarmSteps - 50 * wrongClicks;
             if (score < 0) score = 0;
             levelManager.recordResult(currentLevelIndex, stars, score);
+            levelManager.saveProgress("campaign_progress.dat");
             Event done;
             done.type = EV_DONE;
             events.add(done);
@@ -302,6 +306,7 @@ void GameApp::handleNodeClick(int id) {
         score = 0;
         message = "Alarm full. Level failed - reset and retry.";
         levelManager.recordResult(currentLevelIndex, 0, 0);
+        levelManager.saveProgress("campaign_progress.dat");
         screenState = 3;
     } else {
         message = "Wrong room. +1 alarm step. Try again.";

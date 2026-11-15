@@ -67,5 +67,5 @@ Level definitions live in `data/levels.json`. See
 they default to scenario 1, the number of expected visits, and the calculated
 alarm limit. Set `implemented` to `true` only after that level's model action
 and GUI flow are ready. The campaign unlocks implemented levels in order after
-the previous level earns at least one star. Progress is currently in memory
-for the current run and is not saved between launches.
+the previous level earns at least one star. Stars and best scores are saved in
+`campaign_progress.dat` in the application's working directory.

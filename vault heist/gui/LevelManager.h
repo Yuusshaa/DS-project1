@@ -36,6 +36,8 @@ private:
 
 public:
     bool loadFromJson(std::string filePath);
+    bool loadProgress(std::string filePath);
+    bool saveProgress(std::string filePath);
     int count();
     LevelDefinition& getLevel(int index);
     int findLevel(int act, int number);

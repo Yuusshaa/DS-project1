@@ -225,6 +225,64 @@ bool LevelManager::loadFromJson(std::string filePath) {
     return true;
 }
 
+bool LevelManager::loadProgress(std::string filePath) {
+    std::ifstream input(filePath.c_str());
+    if (!input.is_open()) return false;
+
+    std::string signature;
+    int version = 0;
+    int entryCount = 0;
+    if (!(input >> signature >> version >> entryCount) ||
+        signature != "VAULT_HEIST_PROGRESS" || version != 1 ||
+        entryCount < 0 || entryCount > 10000) {
+        return false;
+    }
+
+    DynArray<int> loadedStars;
+    DynArray<int> loadedScores;
+    for (int i = 0; i < levels.size(); i++) {
+        loadedStars.push(0);
+        loadedScores.push(0);
+    }
+
+    for (int i = 0; i < entryCount; i++) {
+        int act = 0;
+        int number = 0;
+        int stars = 0;
+        int score = 0;
+        if (!(input >> act >> number >> stars >> score) ||
+            act <= 0 || number <= 0 || stars < 0 || stars > 3 || score < 0) {
+            return false;
+        }
+        int index = findLevel(act, number);
+        if (index >= 0) {
+            loadedStars[index] = stars;
+            loadedScores[index] = score;
+        }
+    }
+
+    earnedStars.clear();
+    bestScores.clear();
+    for (int i = 0; i < levels.size(); i++) {
+        earnedStars.push(loadedStars[i]);
+        bestScores.push(loadedScores[i]);
+    }
+    return true;
+}
+
+bool LevelManager::saveProgress(std::string filePath) {
+    std::ofstream output(filePath.c_str());
+    if (!output.is_open()) return false;
+
+    output << "VAULT_HEIST_PROGRESS 1\n";
+    output << levels.size() << "\n";
+    for (int i = 0; i < levels.size(); i++) {
+        output << levels[i].act << " " << levels[i].number << " "
+               << earnedStars[i] << " " << bestScores[i] << "\n";
+    }
+    return output.good();
+}
+
 int LevelManager::count() {
     return levels.size();
 }
