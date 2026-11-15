@@ -29,6 +29,8 @@ private:
     DynArray<int> expectedCompareCodes;
     DynArray<GuiNodePosition> positions;
     std::string message;
+    std::string sandboxValueInput;
+    std::string sandboxSecondInput;
     int windowWidth;
     int windowHeight;
     int screenState; // 0=menu, 1=campaign, 2=level, 3=result
@@ -40,6 +42,7 @@ private:
     int hoveredNodeId;
     int expectedIndex;
     int searchTarget;
+    int sandboxAction;
     int alarmSteps;
     int alarmCapacity;
     int wrongClicks;
@@ -49,6 +52,7 @@ private:
     bool challengeFinished;
     bool searchChallenge;
     bool animationPlaying;
+    bool sandboxSecondFieldFocused;
     float eventTimer;
 
     void processInput();
@@ -73,7 +77,9 @@ private:
     void drawControls();
     void drawEventLog();
     void drawPlaybackControls();
+    void drawSandbox();
     void drawHeapView();
+    void executeSandboxAction(int action);
     void restartPlayback();
     void stepPlayback(int direction);
     std::string describeEvent(Event& event);

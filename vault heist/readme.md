@@ -49,6 +49,10 @@ msbuild VaultHeist.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64 /p:Pr
   in the requested order.
 - Click **Search 60** to show a sample BST search path.
 - Click **Reset level** to restore the sample tree and counters.
+- From the main menu, open **Sandbox**, focus the value field, and type an
+  integer. Use Search, Insert, Delete, or Range Query; enter the range high
+  value in the second field. Press Enter to repeat the last operation.
+- Use **Reset demo** in the Sandbox to restore its starting tree.
 - Use **Escape** to return to the previous menu.
 - Close the window to exit.
 

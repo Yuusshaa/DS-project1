@@ -9,7 +9,13 @@ private:
     std::string message;
 
     int findNodeIndex(int id);
+    int findRootId();
+    int calculateHeight(int id);
+    int calculateSize(int id);
+    void refreshMetadata();
+    void removeNodeRecord(int id);
     void addVisit(int id, EventLog& events);
+    void collectRange(int id, int low, int high, EventLog& events);
 
 public:
     MockGameModel();

@@ -14,6 +14,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     hoveredNodeId = -1;
     expectedIndex = 0;
     searchTarget = 0;
+    sandboxAction = ACTION_SEARCH;
     alarmSteps = 0;
     alarmCapacity = 10;
     wrongClicks = 0;
@@ -23,6 +24,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     challengeFinished = false;
     searchChallenge = false;
     animationPlaying = true;
+    sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
     message = "Starting demo";
 }
@@ -327,8 +329,32 @@ void GameApp::processInput() {
             screenState = 1;
         } else if (screenState == 1) {
             screenState = 0;
+        } else if (screenState == 4) {
+            screenState = 0;
         }
         return;
+    }
+
+    if (screenState == 4) {
+        int codepoint = GetCharPressed();
+        while (codepoint > 0) {
+            if (codepoint >= '0' && codepoint <= '9') {
+                if (sandboxSecondFieldFocused) sandboxSecondInput += (char)codepoint;
+                else sandboxValueInput += (char)codepoint;
+            } else if (codepoint == '-' &&
+                       (sandboxSecondFieldFocused ? sandboxSecondInput : sandboxValueInput).empty()) {
+                if (sandboxSecondFieldFocused) sandboxSecondInput += '-';
+                else sandboxValueInput += '-';
+            }
+            codepoint = GetCharPressed();
+        }
+        if (IsKeyPressed(KEY_BACKSPACE)) {
+            std::string& field = sandboxSecondFieldFocused ? sandboxSecondInput : sandboxValueInput;
+            if (!field.empty()) field.pop_back();
+        }
+        if (IsKeyPressed(KEY_ENTER)) {
+            executeSandboxAction(sandboxAction);
+        }
     }
 
     if (screenState == 2) {
@@ -358,6 +384,13 @@ void GameApp::processInput() {
     if (screenState == 0) {
         if (CheckCollisionPointRec(mouse, Rectangle{490, 320, 300, 58})) {
             screenState = 1;
+        } else if (CheckCollisionPointRec(mouse, Rectangle{490, 394, 300, 58})) {
+            screenState = 4;
+            currentLevelIndex = -1;
+            sandboxValueInput.clear();
+            sandboxSecondInput.clear();
+            sandboxSecondFieldFocused = false;
+            runAction(0, 0, 0);
         }
         return;
     }
@@ -395,6 +428,41 @@ void GameApp::processInput() {
             screenState = 2;
         } else if (CheckCollisionPointRec(mouse, Rectangle{650, 560, 220, 52})) {
             screenState = 1;
+        }
+        return;
+    }
+
+    if (screenState == 4) {
+        if (CheckCollisionPointRec(mouse, Rectangle{24, 725, 180, 44})) {
+            screenState = 0;
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{24, 118, 210, 40})) {
+            sandboxSecondFieldFocused = false;
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{24, 194, 210, 40})) {
+            sandboxSecondFieldFocused = true;
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{24, 260, 210, 42})) {
+            executeSandboxAction(ACTION_SEARCH);
+        } else if (CheckCollisionPointRec(mouse, Rectangle{24, 310, 210, 42})) {
+            executeSandboxAction(ACTION_INSERT);
+        } else if (CheckCollisionPointRec(mouse, Rectangle{24, 360, 210, 42})) {
+            executeSandboxAction(ACTION_DELETE);
+        } else if (CheckCollisionPointRec(mouse, Rectangle{24, 410, 210, 42})) {
+            executeSandboxAction(ACTION_RANGE_QUERY);
+        } else if (CheckCollisionPointRec(mouse, Rectangle{24, 460, 210, 42})) {
+            runAction(0, 0, 0);
+        } else {
+            for (int i = 0; i < positions.size(); i++) {
+                Vector2 center = Vector2{positions[i].x, positions[i].y};
+                if (CheckCollisionPointCircle(mouse, center, 31.0f)) {
+                    highlightedNodeId = positions[i].id;
+                    break;
+                }
+            }
         }
         return;
     }
@@ -492,6 +560,11 @@ void GameApp::draw() {
         EndDrawing();
         return;
     }
+    if (screenState == 4) {
+        drawSandbox();
+        EndDrawing();
+        return;
+    }
 
     DrawText("VAULT HEIST", 24, 22, 30, Color{240, 220, 170, 255});
     DrawText("Tree Lab - GUI mock connected through GameModel", 285, 54, 16,
@@ -524,13 +597,69 @@ void GameApp::drawMainMenu() {
     DrawText("VAULT HEIST", 380, 170, 58, Color{240, 220, 170, 255});
     DrawText("A data structures heist", 480, 240, 22, Color{175, 190, 210, 255});
     drawButton(Rectangle{490, 320, 300, 58}, "Campaign", true);
-    drawButton(Rectangle{490, 394, 300, 58}, "Sandbox (in progress)", false);
+    drawButton(Rectangle{490, 394, 300, 58}, "Sandbox", true);
     DrawText("Choose a mode to enter the vault.", 474, 490, 18,
              Color{150, 165, 185, 255});
     if (levelManager.count() == 0) {
         DrawText("Level data failed to load: data/levels.json", 390, 550, 18,
                  Color{220, 135, 115, 255});
     }
+}
+
+void GameApp::drawSandbox() {
+    DrawText("VAULT HEIST - SANDBOX", 24, 22, 30, Color{240, 220, 170, 255});
+    DrawText("Explore model operations on the demo tree", 285, 54, 16,
+             Color{175, 190, 210, 255});
+    drawPlaybackControls();
+    DrawLine(260, 80, 260, windowHeight - 24, Color{62, 76, 96, 255});
+
+    DrawText("VALUE", 24, 94, 14, Color{150, 175, 205, 255});
+    DrawRectangle(24, 118, 210, 40, Color{25, 34, 48, 255});
+    DrawRectangleLinesEx(Rectangle{24, 118, 210, 40}, 2.0f,
+                         sandboxSecondFieldFocused ? Color{62, 76, 96, 255} :
+                         Color{240, 220, 170, 255});
+    DrawText(sandboxValueInput.c_str(), 36, 128, 18, Color{230, 235, 242, 255});
+
+    DrawText("RANGE HIGH", 24, 170, 14, Color{150, 175, 205, 255});
+    DrawRectangle(24, 194, 210, 40, Color{25, 34, 48, 255});
+    DrawRectangleLinesEx(Rectangle{24, 194, 210, 40}, 2.0f,
+                         sandboxSecondFieldFocused ? Color{240, 220, 170, 255} :
+                         Color{62, 76, 96, 255});
+    DrawText(sandboxSecondInput.c_str(), 36, 204, 18, Color{230, 235, 242, 255});
+
+    const char* labels[5] = {"Search", "Insert", "Delete", "Range query", "Reset demo"};
+    for (int i = 0; i < 5; i++) {
+        drawButton(Rectangle{24, (float)(260 + i * 50), 210, 42}, labels[i], true);
+    }
+    drawButton(Rectangle{24, 725, 180, 44}, "Main menu", true);
+    drawTree();
+    drawEventLog();
+    DrawText(message.c_str(), 285, windowHeight - 42, 18,
+             Color{220, 224, 230, 255});
+}
+
+void GameApp::executeSandboxAction(int action) {
+    int value = 0;
+    int secondValue = 0;
+    try {
+        if (sandboxValueInput.empty()) throw 0;
+        value = std::stoi(sandboxValueInput);
+        if (action == ACTION_RANGE_QUERY) {
+            if (sandboxSecondInput.empty()) throw 0;
+            secondValue = std::stoi(sandboxSecondInput);
+        }
+    } catch (...) {
+        message = action == ACTION_RANGE_QUERY
+            ? "Enter a low value and a high value first."
+            : "Enter an integer value first.";
+        return;
+    }
+    if (action == ACTION_RANGE_QUERY && value > secondValue) {
+        message = "Range low value must be less than or equal to high value.";
+        return;
+    }
+    sandboxAction = action;
+    runAction(action, value, secondValue);
 }
 
 void GameApp::drawCampaignMap() {
