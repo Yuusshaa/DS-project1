@@ -16,6 +16,8 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     searchTarget = 0;
     sandboxAction = ACTION_SEARCH;
     insertTarget = 0;
+    deleteTarget = 0;
+    expectedDeleteCase = 0;
     alarmSteps = 0;
     alarmCapacity = 10;
     wrongClicks = 0;
@@ -25,6 +27,8 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     challengeFinished = false;
     searchChallenge = false;
     insertChallenge = false;
+    deleteChallenge = false;
+    deleteCasePending = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
@@ -56,6 +60,8 @@ void GameApp::runAction(int action, int value, int secondValue) {
     challengeFinished = false;
     searchChallenge = false;
     insertChallenge = false;
+    deleteChallenge = false;
+    deleteCasePending = false;
     expectedRoute.clear();
     events.clear();
     if (action == 0) {
@@ -94,6 +100,7 @@ std::string GameApp::traversalName(int action) {
 void GameApp::startTraversalChallenge(int action) {
     searchChallenge = false;
     insertChallenge = false;
+    deleteChallenge = false;
     events.clear();
     if (model.performAction(action, 0, 0, events) == false) {
         message = "Could not start traversal challenge";
@@ -135,6 +142,7 @@ void GameApp::startTraversalChallenge(int action) {
 void GameApp::startSearchChallenge(int target) {
     searchChallenge = false;
     insertChallenge = false;
+    deleteChallenge = false;
     events.clear();
     if (!model.performAction(ACTION_SEARCH, target, 0, events)) {
         message = "Could not prepare the search challenge";
@@ -185,6 +193,7 @@ void GameApp::startSearchChallenge(int target) {
 void GameApp::startInsertChallenge(int target) {
     searchChallenge = false;
     insertChallenge = false;
+    deleteChallenge = false;
     copyViewData(view, challengeStartView);
     EventLog plannedEvents;
     if (!model.performAction(ACTION_INSERT, target, 0, plannedEvents)) {
@@ -247,18 +256,110 @@ void GameApp::startInsertChallenge(int target) {
               ": click the BST comparison path";
 }
 
+void GameApp::startDeleteChallenge(int target) {
+    searchChallenge = false;
+    insertChallenge = false;
+    deleteChallenge = false;
+    deleteCasePending = false;
+    copyViewData(view, challengeStartView);
+    int targetIndex = -1;
+    for (int i = 0; i < view.treeNodes.size(); i++) {
+        if (view.treeNodes[i].value == target) {
+            targetIndex = i;
+            break;
+        }
+    }
+    if (targetIndex < 0) {
+        message = "The delete target is missing from this scenario";
+        return;
+    }
+    int childCount = 0;
+    if (view.treeNodes[targetIndex].leftId >= 0) childCount++;
+    if (view.treeNodes[targetIndex].rightId >= 0) childCount++;
+    expectedDeleteCase = childCount == 0 ? 1 : childCount == 1 ? 2 : 3;
+
+    EventLog plannedEvents;
+    if (!model.performAction(ACTION_DELETE, target, 0, plannedEvents)) {
+        message = model.statusText();
+        return;
+    }
+    expectedRoute.clear();
+    expectedCompareCodes.clear();
+    pendingDeleteEvents.clear();
+    for (int i = 0; i < plannedEvents.size(); i++) {
+        Event& event = plannedEvents.get(i);
+        if (event.type == EV_COMPARE) {
+            expectedRoute.push(event.nodeId);
+            expectedCompareCodes.push(event.code);
+        } else if (event.type != EV_DONE) {
+            pendingDeleteEvents.push(event);
+        }
+    }
+    if (expectedRoute.size() == 0 || pendingDeleteEvents.size() == 0) {
+        int scenarioId = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count()
+            ? levelManager.getLevel(currentLevelIndex).scenarioId : 1;
+        EventLog resetEvents;
+        model.loadScenario(scenarioId, resetEvents);
+        copyViewData(challengeStartView, view);
+        rebuildLayout();
+        message = "Model did not provide the expected delete events";
+        return;
+    }
+    model.copyView(challengeFinalView);
+    copyViewData(challengeStartView, view);
+    rebuildLayout();
+    events.clear();
+    deleteTarget = target;
+    deleteChallenge = true;
+    deleteCasePending = true;
+    expectedIndex = 0;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    int optimalSteps = expectedRoute.size();
+    if (currentLevelIndex >= 0 && currentLevelIndex < levelManager.count()) {
+        LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
+        if (level.optimalSteps > 0) optimalSteps = level.optimalSteps;
+        if (level.alarmCapacity > 0) alarmCapacity = level.alarmCapacity;
+        else alarmCapacity = (3 * optimalSteps + 1) / 2 + 2;
+    } else {
+        alarmCapacity = (3 * optimalSteps + 1) / 2 + 2;
+    }
+    challengeActive = false;
+    challengeFinished = false;
+    currentEvent = -1;
+    nextEvent = 0;
+    animationPlaying = true;
+    highlightedNodeId = -1;
+    message = "Choose the deletion case for treasure " + std::to_string(target);
+}
+
+void GameApp::selectDeleteCase(int selectedCase) {
+    if (!deleteChallenge || !deleteCasePending) return;
+    if (selectedCase != expectedDeleteCase) {
+        message = "That case does not match this node. Choose the correct case.";
+        return;
+    }
+    deleteCasePending = false;
+    challengeActive = true;
+    expectedIndex = 0;
+    message = "Correct case. Click the BST comparison path to delete the node.";
+}
+
 void GameApp::handleNodeClick(int id) {
     if (challengeActive == false || challengeFinished == true) {
         return;
     }
 
-    if (searchChallenge || insertChallenge) {
+    if (searchChallenge || insertChallenge || deleteChallenge) {
         if (expectedIndex < expectedRoute.size() &&
             id == expectedRoute[expectedIndex]) {
             Event event;
             event.type = EV_COMPARE;
             event.nodeId = id;
-            event.value = insertChallenge ? insertTarget : searchTarget;
+            event.value = insertChallenge ? insertTarget :
+                          deleteChallenge ? deleteTarget : searchTarget;
             event.code = expectedCompareCodes[expectedIndex];
             events.add(event);
             alarmSteps++;
@@ -268,8 +369,11 @@ void GameApp::handleNodeClick(int id) {
             highlightedNodeId = id;
             eventTimer = 0.0f;
             if (expectedIndex == expectedRoute.size()) {
-                if (insertChallenge && alarmSteps < alarmCapacity) {
-                    events.add(pendingInsertEvent);
+                if ((insertChallenge || deleteChallenge) && alarmSteps < alarmCapacity) {
+                    if (insertChallenge) events.add(pendingInsertEvent);
+                    for (int i = 0; i < pendingDeleteEvents.size(); i++) {
+                        events.add(pendingDeleteEvents[i]);
+                    }
                     Event done;
                     done.type = EV_DONE;
                     events.add(done);
@@ -283,7 +387,7 @@ void GameApp::handleNodeClick(int id) {
                     levelManager.getLevel(currentLevelIndex).optimalSteps > 0) {
                     optimalSteps = levelManager.getLevel(currentLevelIndex).optimalSteps;
                 }
-                bool targetFound = insertChallenge ||
+                bool targetFound = insertChallenge || deleteChallenge ||
                     expectedCompareCodes[expectedIndex - 1] == CMP_EQUAL;
                 if (!targetFound || alarmSteps >= alarmCapacity) stars = 0;
                 else if (wrongClicks == 0 && alarmSteps <= optimalSteps) stars = 3;
@@ -292,12 +396,13 @@ void GameApp::handleNodeClick(int id) {
                 score = stars > 0 ? 1000 - 10 * alarmSteps - 50 * wrongClicks : 0;
                 if (score < 0) score = 0;
                 message = stars > 0 ? (insertChallenge ? "Room inserted. Route complete." :
-                                                        "Target found! Search complete.") :
+                                       deleteChallenge ? "Node deleted. Case and path correct." :
+                                                         "Target found! Search complete.") :
                           targetFound ? "Alarm full. Level failed - retry." :
                                         "Target was not found. Level failed - retry.";
                 levelManager.recordResult(currentLevelIndex, stars, score);
                 levelManager.saveProgress("campaign_progress.dat");
-                if (!insertChallenge) {
+                if (!insertChallenge && !deleteChallenge) {
                     Event done;
                     done.type = EV_DONE;
                     events.add(done);
@@ -587,6 +692,9 @@ void GameApp::processInput() {
     bool isInsertLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
         levelManager.getLevel(currentLevelIndex).number == 2;
+    bool isDeleteLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
+        levelManager.getLevel(currentLevelIndex).act == 2 &&
+        levelManager.getLevel(currentLevelIndex).number == 3;
     if (isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
         int target = levelManager.getLevel(currentLevelIndex).targetValue;
         startSearchChallenge(target);
@@ -597,17 +705,37 @@ void GameApp::processInput() {
         startInsertChallenge(target);
     } else if (isInsertLevel && CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
         runAction(0, 0, 0);
-    } else if (!isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
+    } else if (isDeleteLevel && CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
+        int target = levelManager.getLevel(currentLevelIndex).targetValue;
+        startDeleteChallenge(target);
+    } else if (isDeleteLevel && deleteCasePending &&
+               CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
+        selectDeleteCase(1);
+    } else if (isDeleteLevel && deleteCasePending &&
+               CheckCollisionPointRec(mouse, Rectangle{20, 182, 220, 42})) {
+        selectDeleteCase(2);
+    } else if (isDeleteLevel && deleteCasePending &&
+               CheckCollisionPointRec(mouse, Rectangle{20, 232, 220, 42})) {
+        selectDeleteCase(3);
+    } else if (isDeleteLevel && CheckCollisionPointRec(mouse, Rectangle{20, 282, 220, 42})) {
+        runAction(0, 0, 0);
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel &&
+               CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_PREORDER);
-    } else if (!isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel &&
+               CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_INORDER);
-    } else if (!isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{20, 182, 220, 42})) {
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel &&
+               CheckCollisionPointRec(mouse, Rectangle{20, 182, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_POSTORDER);
-    } else if (!isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{20, 232, 220, 42})) {
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel &&
+               CheckCollisionPointRec(mouse, Rectangle{20, 232, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_LEVEL_ORDER);
-    } else if (!isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{20, 282, 220, 42})) {
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel &&
+               CheckCollisionPointRec(mouse, Rectangle{20, 282, 220, 42})) {
         runAction(ACTION_SEARCH, 60, 0);
-    } else if (!isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{20, 332, 220, 42})) {
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel &&
+               CheckCollisionPointRec(mouse, Rectangle{20, 332, 220, 42})) {
         runAction(0, 0, 0);
     } else {
         for (int i = 0; i < positions.size(); i++) {
@@ -838,16 +966,31 @@ void GameApp::drawControls() {
     bool isInsertLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
         levelManager.getLevel(currentLevelIndex).number == 2;
-    if (isSearchLevel || isInsertLevel) {
+    bool isDeleteLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
+        levelManager.getLevel(currentLevelIndex).act == 2 &&
+        levelManager.getLevel(currentLevelIndex).number == 3;
+    if (isSearchLevel || isInsertLevel || isDeleteLevel) {
         LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
-        DrawText(isSearchLevel ? "ACT 2.1 - BST SEARCH" : "ACT 2.2 - BST INSERT",
+        const char* heading = isSearchLevel ? "ACT 2.1 - BST SEARCH" :
+                              isInsertLevel ? "ACT 2.2 - BST INSERT" :
+                                              "ACT 2.3 - BST DELETE";
+        DrawText(heading,
                  24, 55, 16, Color{150, 175, 205, 255});
-        std::string startLabel = (isSearchLevel ? "Search " : "Insert ") +
+        std::string startLabel = (isSearchLevel ? "Search " :
+                                  isInsertLevel ? "Insert " : "Delete ") +
                                  std::to_string(level.targetValue);
-        std::string labels[2] = {startLabel, "Reset level"};
-        for (int i = 0; i < 2; i++) {
-            int y = 82 + i * 50;
-            drawButton(Rectangle{20, (float)y, 220, 42}, labels[i], true);
+        if (isDeleteLevel) {
+            drawButton(Rectangle{20, 82, 220, 42}, startLabel, true);
+            drawButton(Rectangle{20, 132, 220, 42}, "Leaf", deleteCasePending);
+            drawButton(Rectangle{20, 182, 220, 42}, "One child", deleteCasePending);
+            drawButton(Rectangle{20, 232, 220, 42}, "Two children", deleteCasePending);
+            drawButton(Rectangle{20, 282, 220, 42}, "Reset level", true);
+        } else {
+            std::string labels[2] = {startLabel, "Reset level"};
+            for (int i = 0; i < 2; i++) {
+                int y = 82 + i * 50;
+                drawButton(Rectangle{20, (float)y, 220, 42}, labels[i], true);
+            }
         }
     } else {
         DrawText("ACT 1.1 - TRAVERSAL", 24, 55, 16, Color{150, 175, 205, 255});
@@ -856,7 +999,7 @@ void GameApp::drawControls() {
         "Quiz: Preorder", "Quiz: Inorder", "Quiz: Postorder", "Quiz: Level order",
         "Search 60", "Reset level"
     };
-    for (int i = 0; i < (isSearchLevel ? 0 : 6); i++) {
+    for (int i = 0; i < ((isSearchLevel || isInsertLevel || isDeleteLevel) ? 0 : 6); i++) {
         int y = 82 + i * 50;
         DrawRectangleRounded(Rectangle{20, (float)y, 220, 42}, 0.15f, 6,
                              Color{42, 57, 78, 255});

@@ -47,6 +47,9 @@ private:
     int sandboxAction;
     int insertTarget;
     Event pendingInsertEvent;
+    DynArray<Event> pendingDeleteEvents;
+    int deleteTarget;
+    int expectedDeleteCase;
     int alarmSteps;
     int alarmCapacity;
     int wrongClicks;
@@ -56,6 +59,8 @@ private:
     bool challengeFinished;
     bool searchChallenge;
     bool insertChallenge;
+    bool deleteChallenge;
+    bool deleteCasePending;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
@@ -72,6 +77,8 @@ private:
     void startTraversalChallenge(int action);
     void startSearchChallenge(int target);
     void startInsertChallenge(int target);
+    void startDeleteChallenge(int target);
+    void selectDeleteCase(int selectedCase);
     void handleNodeClick(int id);
     std::string traversalName(int action);
     void refreshView();
