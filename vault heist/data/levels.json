@@ -7,7 +7,7 @@
     {"act": 1, "number": 5, "title": "Mirror the Vault", "concept": "tree inversion", "objective": "Mirror the binary tree.", "implemented": false},
 
     {"act": 2, "number": 1, "title": "Search Heist", "concept": "BST search", "objective": "Follow each comparison to find treasure 60.", "scenarioId": 1, "targetValue": 60, "optimalSteps": 3, "alarmCapacity": 7, "implemented": true},
-    {"act": 2, "number": 2, "title": "Stash Loot", "concept": "BST insertion", "objective": "Insert a treasure at its correct BST position.", "implemented": false},
+    {"act": 2, "number": 2, "title": "Stash Loot", "concept": "BST insertion", "objective": "Follow the comparison path to insert treasure 65.", "scenarioId": 1, "targetValue": 65, "optimalSteps": 3, "alarmCapacity": 7, "implemented": true},
     {"act": 2, "number": 3, "title": "Steal and Collapse", "concept": "BST deletion", "objective": "Delete a node and identify its case.", "implemented": false},
     {"act": 2, "number": 4, "title": "Range Raid", "concept": "BST range query", "objective": "Find keys in a range while pruning subtrees.", "implemented": false},
     {"act": 2, "number": 5, "title": "Lazy Architect", "concept": "BST degeneration", "objective": "Search a deliberately skewed tree.", "implemented": false},

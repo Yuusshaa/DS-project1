@@ -24,6 +24,8 @@ private:
     GameModel& model;
     LevelManager levelManager;
     ModelView view;
+    ModelView challengeStartView;
+    ModelView challengeFinalView;
     EventLog events;
     DynArray<int> expectedRoute;
     DynArray<int> expectedCompareCodes;
@@ -43,6 +45,8 @@ private:
     int expectedIndex;
     int searchTarget;
     int sandboxAction;
+    int insertTarget;
+    Event pendingInsertEvent;
     int alarmSteps;
     int alarmCapacity;
     int wrongClicks;
@@ -51,6 +55,7 @@ private:
     bool challengeActive;
     bool challengeFinished;
     bool searchChallenge;
+    bool insertChallenge;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
@@ -66,9 +71,11 @@ private:
     void loadCurrentLevel();
     void startTraversalChallenge(int action);
     void startSearchChallenge(int target);
+    void startInsertChallenge(int target);
     void handleNodeClick(int id);
     std::string traversalName(int action);
     void refreshView();
+    void copyViewData(ModelView& source, ModelView& destination);
     void rebuildLayout();
     void assignPositions(int nodeId, int depth, int& cursor);
     int findNodeIndex(int id);

@@ -15,6 +15,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     expectedIndex = 0;
     searchTarget = 0;
     sandboxAction = ACTION_SEARCH;
+    insertTarget = 0;
     alarmSteps = 0;
     alarmCapacity = 10;
     wrongClicks = 0;
@@ -23,6 +24,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     challengeActive = false;
     challengeFinished = false;
     searchChallenge = false;
+    insertChallenge = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
@@ -53,6 +55,7 @@ void GameApp::runAction(int action, int value, int secondValue) {
     challengeActive = false;
     challengeFinished = false;
     searchChallenge = false;
+    insertChallenge = false;
     expectedRoute.clear();
     events.clear();
     if (action == 0) {
@@ -90,6 +93,7 @@ std::string GameApp::traversalName(int action) {
 
 void GameApp::startTraversalChallenge(int action) {
     searchChallenge = false;
+    insertChallenge = false;
     events.clear();
     if (model.performAction(action, 0, 0, events) == false) {
         message = "Could not start traversal challenge";
@@ -129,6 +133,8 @@ void GameApp::startTraversalChallenge(int action) {
 }
 
 void GameApp::startSearchChallenge(int target) {
+    searchChallenge = false;
+    insertChallenge = false;
     events.clear();
     if (!model.performAction(ACTION_SEARCH, target, 0, events)) {
         message = "Could not prepare the search challenge";
@@ -176,18 +182,83 @@ void GameApp::startSearchChallenge(int target) {
               std::to_string(target);
 }
 
+void GameApp::startInsertChallenge(int target) {
+    searchChallenge = false;
+    insertChallenge = false;
+    copyViewData(view, challengeStartView);
+    EventLog plannedEvents;
+    if (!model.performAction(ACTION_INSERT, target, 0, plannedEvents)) {
+        message = model.statusText();
+        return;
+    }
+
+    expectedRoute.clear();
+    expectedCompareCodes.clear();
+    pendingInsertEvent = Event();
+    bool hasInsert = false;
+    for (int i = 0; i < plannedEvents.size(); i++) {
+        Event& event = plannedEvents.get(i);
+        if (event.type == EV_COMPARE) {
+            expectedRoute.push(event.nodeId);
+            expectedCompareCodes.push(event.code);
+        } else if (event.type == EV_INSERT) {
+            pendingInsertEvent = event;
+            hasInsert = true;
+        }
+    }
+    if (!hasInsert || expectedRoute.size() == 0) {
+        int scenarioId = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count()
+            ? levelManager.getLevel(currentLevelIndex).scenarioId : 1;
+        EventLog resetEvents;
+        model.loadScenario(scenarioId, resetEvents);
+        copyViewData(challengeStartView, view);
+        rebuildLayout();
+        message = "Model did not provide the expected insertion events";
+        return;
+    }
+
+    model.copyView(challengeFinalView);
+    copyViewData(challengeStartView, view);
+    rebuildLayout();
+    events.clear();
+    insertTarget = target;
+    insertChallenge = true;
+    expectedIndex = 0;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    int optimalSteps = expectedRoute.size();
+    if (currentLevelIndex >= 0 && currentLevelIndex < levelManager.count()) {
+        LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
+        if (level.optimalSteps > 0) optimalSteps = level.optimalSteps;
+        if (level.alarmCapacity > 0) alarmCapacity = level.alarmCapacity;
+        else alarmCapacity = (3 * optimalSteps + 1) / 2 + 2;
+    } else {
+        alarmCapacity = (3 * optimalSteps + 1) / 2 + 2;
+    }
+    challengeActive = true;
+    challengeFinished = false;
+    currentEvent = -1;
+    nextEvent = 0;
+    animationPlaying = true;
+    highlightedNodeId = -1;
+    message = "Deliver " + std::to_string(target) +
+              ": click the BST comparison path";
+}
+
 void GameApp::handleNodeClick(int id) {
     if (challengeActive == false || challengeFinished == true) {
         return;
     }
 
-    if (searchChallenge) {
+    if (searchChallenge || insertChallenge) {
         if (expectedIndex < expectedRoute.size() &&
             id == expectedRoute[expectedIndex]) {
             Event event;
             event.type = EV_COMPARE;
             event.nodeId = id;
-            event.value = searchTarget;
+            event.value = insertChallenge ? insertTarget : searchTarget;
             event.code = expectedCompareCodes[expectedIndex];
             events.add(event);
             alarmSteps++;
@@ -197,6 +268,14 @@ void GameApp::handleNodeClick(int id) {
             highlightedNodeId = id;
             eventTimer = 0.0f;
             if (expectedIndex == expectedRoute.size()) {
+                if (insertChallenge && alarmSteps < alarmCapacity) {
+                    events.add(pendingInsertEvent);
+                    Event done;
+                    done.type = EV_DONE;
+                    events.add(done);
+                    copyViewData(challengeFinalView, view);
+                    rebuildLayout();
+                }
                 challengeActive = false;
                 challengeFinished = true;
                 int optimalSteps = expectedRoute.size();
@@ -204,27 +283,36 @@ void GameApp::handleNodeClick(int id) {
                     levelManager.getLevel(currentLevelIndex).optimalSteps > 0) {
                     optimalSteps = levelManager.getLevel(currentLevelIndex).optimalSteps;
                 }
-                bool targetFound = expectedCompareCodes[expectedIndex - 1] == CMP_EQUAL;
+                bool targetFound = insertChallenge ||
+                    expectedCompareCodes[expectedIndex - 1] == CMP_EQUAL;
                 if (!targetFound || alarmSteps >= alarmCapacity) stars = 0;
                 else if (wrongClicks == 0 && alarmSteps <= optimalSteps) stars = 3;
                 else if (wrongClicks <= 1 && alarmSteps * 4 <= optimalSteps * 5) stars = 2;
                 else stars = 1;
                 score = stars > 0 ? 1000 - 10 * alarmSteps - 50 * wrongClicks : 0;
                 if (score < 0) score = 0;
-                message = stars > 0 ? "Target found! Search complete." :
+                message = stars > 0 ? (insertChallenge ? "Room inserted. Route complete." :
+                                                        "Target found! Search complete.") :
                           targetFound ? "Alarm full. Level failed - retry." :
                                         "Target was not found. Level failed - retry.";
                 levelManager.recordResult(currentLevelIndex, stars, score);
                 levelManager.saveProgress("campaign_progress.dat");
-                Event done;
-                done.type = EV_DONE;
-                events.add(done);
+                if (!insertChallenge) {
+                    Event done;
+                    done.type = EV_DONE;
+                    events.add(done);
+                }
                 screenState = 3;
             } else {
                 int comparison = expectedCompareCodes[expectedIndex - 1];
-                message = comparison == CMP_LESS ? "Target is larger. Continue right." :
-                          comparison == CMP_GREATER ? "Target is smaller. Continue left." :
-                          "Match found. Continue to confirm the route.";
+                if (insertChallenge) {
+                    message = comparison == CMP_LESS ? "New key is larger. Continue right." :
+                              "New key is smaller. Continue left.";
+                } else {
+                    message = comparison == CMP_LESS ? "Target is larger. Continue right." :
+                              comparison == CMP_GREATER ? "Target is smaller. Continue left." :
+                              "Match found. Continue to confirm the route.";
+                }
             }
             return;
         }
@@ -318,6 +406,18 @@ void GameApp::handleNodeClick(int id) {
 void GameApp::refreshView() {
     model.copyView(view);
     rebuildLayout();
+}
+
+void GameApp::copyViewData(ModelView& source, ModelView& destination) {
+    destination.clear();
+    destination.viewType = source.viewType;
+    destination.heapSize = source.heapSize;
+    for (int i = 0; i < source.treeNodes.size(); i++) {
+        destination.treeNodes.push(source.treeNodes[i]);
+    }
+    for (int i = 0; i < source.heapValues.size(); i++) {
+        destination.heapValues.push(source.heapValues[i]);
+    }
 }
 
 void GameApp::processInput() {
@@ -484,10 +584,18 @@ void GameApp::processInput() {
     bool isSearchLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
         levelManager.getLevel(currentLevelIndex).number == 1;
+    bool isInsertLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
+        levelManager.getLevel(currentLevelIndex).act == 2 &&
+        levelManager.getLevel(currentLevelIndex).number == 2;
     if (isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
         int target = levelManager.getLevel(currentLevelIndex).targetValue;
         startSearchChallenge(target);
     } else if (isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
+        runAction(0, 0, 0);
+    } else if (isInsertLevel && CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
+        int target = levelManager.getLevel(currentLevelIndex).targetValue;
+        startInsertChallenge(target);
+    } else if (isInsertLevel && CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
         runAction(0, 0, 0);
     } else if (!isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_PREORDER);
@@ -727,10 +835,15 @@ void GameApp::drawControls() {
     bool isSearchLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
         levelManager.getLevel(currentLevelIndex).number == 1;
-    if (isSearchLevel) {
+    bool isInsertLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
+        levelManager.getLevel(currentLevelIndex).act == 2 &&
+        levelManager.getLevel(currentLevelIndex).number == 2;
+    if (isSearchLevel || isInsertLevel) {
         LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
-        DrawText("ACT 2.1 - BST SEARCH", 24, 55, 16, Color{150, 175, 205, 255});
-        std::string startLabel = "Search " + std::to_string(level.targetValue);
+        DrawText(isSearchLevel ? "ACT 2.1 - BST SEARCH" : "ACT 2.2 - BST INSERT",
+                 24, 55, 16, Color{150, 175, 205, 255});
+        std::string startLabel = (isSearchLevel ? "Search " : "Insert ") +
+                                 std::to_string(level.targetValue);
         std::string labels[2] = {startLabel, "Reset level"};
         for (int i = 0; i < 2; i++) {
             int y = 82 + i * 50;
@@ -977,6 +1090,22 @@ std::string GameApp::describeEvent(Event& event) {
     }
     if (event.type == EV_DONE) {
         return "Action complete";
+    }
+    if (event.type == EV_INSERT) {
+        return "Insert " + std::to_string(event.value) +
+               " at node " + std::to_string(event.nodeId);
+    }
+    if (event.type == EV_UNLINK) {
+        return "Remove node " + std::to_string(event.nodeId);
+    }
+    if (event.type == EV_SWAP_VALUE) {
+        return "Swap values at nodes " + std::to_string(event.nodeId) +
+               " and " + std::to_string(event.otherId);
+    }
+    if (event.type == EV_HIGHLIGHT_SUBTREE) {
+        return event.code == HL_SKIPPED
+            ? "Skip subtree at node " + std::to_string(event.nodeId)
+            : "Highlight subtree at node " + std::to_string(event.nodeId);
     }
     if (event.type == EV_HEAP_BUILD) return "Build max heap";
     if (event.type == EV_HEAP_SWAP) {
