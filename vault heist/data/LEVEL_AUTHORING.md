@@ -30,6 +30,8 @@ nested objects or arrays inside a level.
 - `scenarioId`: ID passed to `GameModel::loadScenario`. Agree on its meaning
   with the model owner; the JSON number alone does not create a scenario.
 - `targetValue`: optional target for levels that search or compare a key.
+- `rangeLow` and `rangeHigh`: optional inclusive range bounds for range-query
+  levels.
 - `optimalSteps`: expected minimum operation count, used for stars. Use 0 or
   omit it when the model should determine this dynamically.
 - `alarmCapacity`: failure limit. Use 0 or omit it to derive the limit as

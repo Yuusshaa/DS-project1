@@ -29,6 +29,7 @@ private:
     EventLog events;
     DynArray<int> expectedRoute;
     DynArray<int> expectedCompareCodes;
+    DynArray<int> skippedSubtreeRoots;
     DynArray<GuiNodePosition> positions;
     std::string message;
     std::string sandboxValueInput;
@@ -50,6 +51,8 @@ private:
     DynArray<Event> pendingDeleteEvents;
     int deleteTarget;
     int expectedDeleteCase;
+    int rangeLow;
+    int rangeHigh;
     int alarmSteps;
     int alarmCapacity;
     int wrongClicks;
@@ -61,6 +64,7 @@ private:
     bool insertChallenge;
     bool deleteChallenge;
     bool deleteCasePending;
+    bool rangeChallenge;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
@@ -78,6 +82,7 @@ private:
     void startSearchChallenge(int target);
     void startInsertChallenge(int target);
     void startDeleteChallenge(int target);
+    void startRangeChallenge(int low, int high);
     void selectDeleteCase(int selectedCase);
     void handleNodeClick(int id);
     std::string traversalName(int action);
@@ -87,6 +92,7 @@ private:
     void assignPositions(int nodeId, int depth, int& cursor);
     int findNodeIndex(int id);
     int findPositionIndex(int id);
+    bool isInSkippedSubtree(int id);
     void drawTree();
     void drawControls();
     void drawEventLog();

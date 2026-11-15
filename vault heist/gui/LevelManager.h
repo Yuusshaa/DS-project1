@@ -8,6 +8,8 @@ struct LevelDefinition {
     int number;
     int scenarioId;
     int targetValue;
+    int rangeLow;
+    int rangeHigh;
     int optimalSteps;
     int alarmCapacity;
     bool implemented;
@@ -20,6 +22,8 @@ struct LevelDefinition {
         number = 0;
         scenarioId = 1;
         targetValue = 0;
+        rangeLow = 0;
+        rangeHigh = 0;
         optimalSteps = 0;
         alarmCapacity = 0;
         implemented = false;

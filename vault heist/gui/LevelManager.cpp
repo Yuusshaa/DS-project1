@@ -128,6 +128,10 @@ namespace {
                     if (!readInteger(level.scenarioId)) return false;
                 } else if (key == "targetValue") {
                     if (!readInteger(level.targetValue)) return false;
+                } else if (key == "rangeLow") {
+                    if (!readInteger(level.rangeLow)) return false;
+                } else if (key == "rangeHigh") {
+                    if (!readInteger(level.rangeHigh)) return false;
                 } else if (key == "optimalSteps") {
                     if (!readInteger(level.optimalSteps)) return false;
                 } else if (key == "alarmCapacity") {

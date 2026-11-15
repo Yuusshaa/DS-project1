@@ -18,6 +18,8 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     insertTarget = 0;
     deleteTarget = 0;
     expectedDeleteCase = 0;
+    rangeLow = 0;
+    rangeHigh = 0;
     alarmSteps = 0;
     alarmCapacity = 10;
     wrongClicks = 0;
@@ -29,6 +31,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     insertChallenge = false;
     deleteChallenge = false;
     deleteCasePending = false;
+    rangeChallenge = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
@@ -62,6 +65,7 @@ void GameApp::runAction(int action, int value, int secondValue) {
     insertChallenge = false;
     deleteChallenge = false;
     deleteCasePending = false;
+    rangeChallenge = false;
     expectedRoute.clear();
     events.clear();
     if (action == 0) {
@@ -101,6 +105,7 @@ void GameApp::startTraversalChallenge(int action) {
     searchChallenge = false;
     insertChallenge = false;
     deleteChallenge = false;
+    rangeChallenge = false;
     events.clear();
     if (model.performAction(action, 0, 0, events) == false) {
         message = "Could not start traversal challenge";
@@ -143,6 +148,7 @@ void GameApp::startSearchChallenge(int target) {
     searchChallenge = false;
     insertChallenge = false;
     deleteChallenge = false;
+    rangeChallenge = false;
     events.clear();
     if (!model.performAction(ACTION_SEARCH, target, 0, events)) {
         message = "Could not prepare the search challenge";
@@ -194,6 +200,7 @@ void GameApp::startInsertChallenge(int target) {
     searchChallenge = false;
     insertChallenge = false;
     deleteChallenge = false;
+    rangeChallenge = false;
     copyViewData(view, challengeStartView);
     EventLog plannedEvents;
     if (!model.performAction(ACTION_INSERT, target, 0, plannedEvents)) {
@@ -261,6 +268,7 @@ void GameApp::startDeleteChallenge(int target) {
     insertChallenge = false;
     deleteChallenge = false;
     deleteCasePending = false;
+    rangeChallenge = false;
     copyViewData(view, challengeStartView);
     int targetIndex = -1;
     for (int i = 0; i < view.treeNodes.size(); i++) {
@@ -345,6 +353,75 @@ void GameApp::selectDeleteCase(int selectedCase) {
     challengeActive = true;
     expectedIndex = 0;
     message = "Correct case. Click the BST comparison path to delete the node.";
+}
+
+void GameApp::startRangeChallenge(int low, int high) {
+    searchChallenge = false;
+    insertChallenge = false;
+    deleteChallenge = false;
+    deleteCasePending = false;
+    rangeChallenge = false;
+    events.clear();
+    skippedSubtreeRoots.clear();
+    if (low > high) {
+        message = "Range low value must not exceed high value";
+        return;
+    }
+    EventLog plannedEvents;
+    if (!model.performAction(ACTION_RANGE_QUERY, low, high, plannedEvents)) {
+        message = model.statusText();
+        return;
+    }
+
+    expectedRoute.clear();
+    expectedCompareCodes.clear();
+    skippedSubtreeRoots.clear();
+    for (int i = 0; i < plannedEvents.size(); i++) {
+        Event& event = plannedEvents.get(i);
+        if (event.type == EV_VISIT) {
+            expectedRoute.push(event.nodeId);
+        } else if (event.type == EV_HIGHLIGHT_SUBTREE && event.code == HL_SKIPPED) {
+            skippedSubtreeRoots.push(event.nodeId);
+        }
+    }
+    if (expectedRoute.size() == 0) {
+        message = "No rooms fall inside that range";
+        return;
+    }
+
+    events.clear();
+    for (int i = 0; i < plannedEvents.size(); i++) {
+        Event& event = plannedEvents.get(i);
+        if (event.type == EV_HIGHLIGHT_SUBTREE && event.code == HL_SKIPPED) {
+            events.add(event);
+        }
+    }
+    rangeLow = low;
+    rangeHigh = high;
+    expectedIndex = 0;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    int optimalSteps = expectedRoute.size();
+    if (currentLevelIndex >= 0 && currentLevelIndex < levelManager.count()) {
+        LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
+        if (level.optimalSteps > 0) optimalSteps = level.optimalSteps;
+        if (level.alarmCapacity > 0) alarmCapacity = level.alarmCapacity;
+        else alarmCapacity = (3 * optimalSteps + 1) / 2 + 2;
+    } else {
+        alarmCapacity = (3 * optimalSteps + 1) / 2 + 2;
+    }
+    rangeChallenge = true;
+    challengeActive = true;
+    challengeFinished = false;
+    currentEvent = -1;
+    nextEvent = 0;
+    animationPlaying = true;
+    eventTimer = 0.0f;
+    highlightedNodeId = -1;
+    message = "Select every room with key " + std::to_string(low) + " through " +
+              std::to_string(high);
 }
 
 void GameApp::handleNodeClick(int id) {
@@ -478,6 +555,9 @@ void GameApp::handleNodeClick(int id) {
                 stars = 1;
                 message = "Level complete! 1 star";
             }
+            if (rangeChallenge && stars > 0) {
+                message = "Range cleared. All matching rooms found.";
+            }
             score = 1000 - 10 * alarmSteps - 50 * wrongClicks;
             if (score < 0) score = 0;
             levelManager.recordResult(currentLevelIndex, stars, score);
@@ -487,7 +567,8 @@ void GameApp::handleNodeClick(int id) {
             events.add(done);
             screenState = 3;
         } else {
-            message = "Correct. Keep following the traversal order.";
+            message = rangeChallenge ? "Correct room. Keep selecting in-range rooms." :
+                                       "Correct. Keep following the traversal order.";
         }
         return;
     }
@@ -695,6 +776,9 @@ void GameApp::processInput() {
     bool isDeleteLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
         levelManager.getLevel(currentLevelIndex).number == 3;
+    bool isRangeLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
+        levelManager.getLevel(currentLevelIndex).act == 2 &&
+        levelManager.getLevel(currentLevelIndex).number == 4;
     if (isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
         int target = levelManager.getLevel(currentLevelIndex).targetValue;
         startSearchChallenge(target);
@@ -719,22 +803,27 @@ void GameApp::processInput() {
         selectDeleteCase(3);
     } else if (isDeleteLevel && CheckCollisionPointRec(mouse, Rectangle{20, 282, 220, 42})) {
         runAction(0, 0, 0);
-    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel &&
+    } else if (isRangeLevel && CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
+        LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
+        startRangeChallenge(level.rangeLow, level.rangeHigh);
+    } else if (isRangeLevel && CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
+        runAction(0, 0, 0);
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel &&
                CheckCollisionPointRec(mouse, Rectangle{20, 82, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_PREORDER);
-    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel &&
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel &&
                CheckCollisionPointRec(mouse, Rectangle{20, 132, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_INORDER);
-    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel &&
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel &&
                CheckCollisionPointRec(mouse, Rectangle{20, 182, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_POSTORDER);
-    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel &&
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel &&
                CheckCollisionPointRec(mouse, Rectangle{20, 232, 220, 42})) {
         startTraversalChallenge(ACTION_TRAVERSE_LEVEL_ORDER);
-    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel &&
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel &&
                CheckCollisionPointRec(mouse, Rectangle{20, 282, 220, 42})) {
         runAction(ACTION_SEARCH, 60, 0);
-    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel &&
+    } else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel &&
                CheckCollisionPointRec(mouse, Rectangle{20, 332, 220, 42})) {
         runAction(0, 0, 0);
     } else {
@@ -969,17 +1058,27 @@ void GameApp::drawControls() {
     bool isDeleteLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
         levelManager.getLevel(currentLevelIndex).number == 3;
-    if (isSearchLevel || isInsertLevel || isDeleteLevel) {
+    bool isRangeLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
+        levelManager.getLevel(currentLevelIndex).act == 2 &&
+        levelManager.getLevel(currentLevelIndex).number == 4;
+    if (isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel) {
         LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
         const char* heading = isSearchLevel ? "ACT 2.1 - BST SEARCH" :
                               isInsertLevel ? "ACT 2.2 - BST INSERT" :
-                                              "ACT 2.3 - BST DELETE";
+                              isDeleteLevel ? "ACT 2.3 - BST DELETE" :
+                                              "ACT 2.4 - BST RANGE";
         DrawText(heading,
                  24, 55, 16, Color{150, 175, 205, 255});
         std::string startLabel = (isSearchLevel ? "Search " :
-                                  isInsertLevel ? "Insert " : "Delete ") +
+                                  isInsertLevel ? "Insert " :
+                                  isDeleteLevel ? "Delete " : "Range ") +
                                  std::to_string(level.targetValue);
-        if (isDeleteLevel) {
+        if (isRangeLevel) {
+            startLabel = "Range " + std::to_string(level.rangeLow) + "-" +
+                         std::to_string(level.rangeHigh);
+            drawButton(Rectangle{20, 82, 220, 42}, startLabel, true);
+            drawButton(Rectangle{20, 132, 220, 42}, "Reset level", true);
+        } else if (isDeleteLevel) {
             drawButton(Rectangle{20, 82, 220, 42}, startLabel, true);
             drawButton(Rectangle{20, 132, 220, 42}, "Leaf", deleteCasePending);
             drawButton(Rectangle{20, 182, 220, 42}, "One child", deleteCasePending);
@@ -999,7 +1098,7 @@ void GameApp::drawControls() {
         "Quiz: Preorder", "Quiz: Inorder", "Quiz: Postorder", "Quiz: Level order",
         "Search 60", "Reset level"
     };
-    for (int i = 0; i < ((isSearchLevel || isInsertLevel || isDeleteLevel) ? 0 : 6); i++) {
+    for (int i = 0; i < ((isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel) ? 0 : 6); i++) {
         int y = 82 + i * 50;
         DrawRectangleRounded(Rectangle{20, (float)y, 220, 42}, 0.15f, 6,
                              Color{42, 57, 78, 255});
@@ -1034,17 +1133,21 @@ void GameApp::drawTree() {
         if (node.leftId >= 0) {
             int childPosition = findPositionIndex(node.leftId);
             if (childPosition >= 0) {
+                Color edge = isInSkippedSubtree(node.leftId)
+                    ? Color{65, 72, 82, 255} : Color{92, 112, 138, 255};
                 DrawLineEx(Vector2{positions[parentPosition].x, positions[parentPosition].y},
                            Vector2{positions[childPosition].x, positions[childPosition].y},
-                           3.0f, Color{92, 112, 138, 255});
+                           3.0f, edge);
             }
         }
         if (node.rightId >= 0) {
             int childPosition = findPositionIndex(node.rightId);
             if (childPosition >= 0) {
+                Color edge = isInSkippedSubtree(node.rightId)
+                    ? Color{65, 72, 82, 255} : Color{92, 112, 138, 255};
                 DrawLineEx(Vector2{positions[parentPosition].x, positions[parentPosition].y},
                            Vector2{positions[childPosition].x, positions[childPosition].y},
-                           3.0f, Color{92, 112, 138, 255});
+                           3.0f, edge);
             }
         }
     }
@@ -1053,8 +1156,10 @@ void GameApp::drawTree() {
         ViewNode& node = view.treeNodes[i];
         int p = findPositionIndex(node.id);
         if (p < 0) continue;
-        Color fill = node.id == highlightedNodeId || node.id == hoveredNodeId
-            ? Color{205, 154, 64, 255} : Color{47, 76, 112, 255};
+        Color fill = isInSkippedSubtree(node.id)
+            ? Color{55, 61, 71, 255} :
+            node.id == highlightedNodeId || node.id == hoveredNodeId
+                ? Color{205, 154, 64, 255} : Color{47, 76, 112, 255};
         DrawCircleV(Vector2{positions[p].x, positions[p].y}, 29.0f, fill);
         DrawCircleLines((int)positions[p].x, (int)positions[p].y, 29.0f,
                         Color{188, 205, 226, 255});
@@ -1309,4 +1414,17 @@ int GameApp::findPositionIndex(int id) {
         if (positions[i].id == id) return i;
     }
     return -1;
+}
+
+bool GameApp::isInSkippedSubtree(int id) {
+    int currentId = id;
+    while (currentId >= 0) {
+        for (int i = 0; i < skippedSubtreeRoots.size(); i++) {
+            if (skippedSubtreeRoots[i] == currentId) return true;
+        }
+        int index = findNodeIndex(currentId);
+        if (index < 0) return false;
+        currentId = view.treeNodes[index].parentId;
+    }
+    return false;
 }
