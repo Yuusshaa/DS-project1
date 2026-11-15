@@ -35,6 +35,7 @@ private:
     int activeAct;
     int currentLevelIndex;
     int currentEvent;
+    int nextEvent;
     int highlightedNodeId;
     int hoveredNodeId;
     int expectedIndex;
@@ -47,6 +48,7 @@ private:
     bool challengeActive;
     bool challengeFinished;
     bool searchChallenge;
+    bool animationPlaying;
     float eventTimer;
 
     void processInput();
@@ -70,7 +72,10 @@ private:
     void drawTree();
     void drawControls();
     void drawEventLog();
+    void drawPlaybackControls();
     void drawHeapView();
+    void restartPlayback();
+    void stepPlayback(int direction);
     std::string describeEvent(Event& event);
 
 public:

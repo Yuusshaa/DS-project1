@@ -9,6 +9,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     activeAct = 1;
     currentLevelIndex = -1;
     currentEvent = -1;
+    nextEvent = 0;
     highlightedNodeId = -1;
     hoveredNodeId = -1;
     expectedIndex = 0;
@@ -21,6 +22,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     challengeActive = false;
     challengeFinished = false;
     searchChallenge = false;
+    animationPlaying = true;
     eventTimer = 0.0f;
     message = "Starting demo";
 }
@@ -60,7 +62,9 @@ void GameApp::runAction(int action, int value, int secondValue) {
     wrongClicks = 0;
     stars = 0;
     score = 0;
-    currentEvent = events.size() > 0 ? 0 : -1;
+    currentEvent = -1;
+    nextEvent = 0;
+    animationPlaying = true;
     highlightedNodeId = -1;
     eventTimer = 0.0f;
     refreshView();
@@ -115,6 +119,8 @@ void GameApp::startTraversalChallenge(int action) {
     challengeActive = expectedRoute.size() > 0;
     challengeFinished = false;
     currentEvent = -1;
+    nextEvent = 0;
+    animationPlaying = true;
     highlightedNodeId = -1;
     message = "Act 1.1: click rooms in " + traversalName(action) + " order";
 }
@@ -160,6 +166,8 @@ void GameApp::startSearchChallenge(int target) {
     challengeActive = true;
     challengeFinished = false;
     currentEvent = -1;
+    nextEvent = 0;
+    animationPlaying = true;
     highlightedNodeId = -1;
     message = "Search challenge: follow comparisons to find " +
               std::to_string(target);
@@ -182,6 +190,7 @@ void GameApp::handleNodeClick(int id) {
             alarmSteps++;
             expectedIndex++;
             currentEvent = events.size() - 1;
+            nextEvent = events.size();
             highlightedNodeId = id;
             eventTimer = 0.0f;
             if (expectedIndex == expectedRoute.size()) {
@@ -245,6 +254,7 @@ void GameApp::handleNodeClick(int id) {
         alarmSteps++;
         expectedIndex++;
         currentEvent = events.size() - 1;
+        nextEvent = events.size();
         highlightedNodeId = id;
         eventTimer = 0.0f;
 
@@ -316,6 +326,25 @@ void GameApp::processInput() {
         return;
     }
 
+    if (screenState == 2) {
+        if (IsKeyPressed(KEY_SPACE)) {
+            animationPlaying = !animationPlaying;
+            return;
+        }
+        if (IsKeyPressed(KEY_LEFT)) {
+            stepPlayback(-1);
+            return;
+        }
+        if (IsKeyPressed(KEY_RIGHT)) {
+            stepPlayback(1);
+            return;
+        }
+        if (IsKeyPressed(KEY_R)) {
+            restartPlayback();
+            return;
+        }
+    }
+
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         return;
     }
@@ -365,6 +394,20 @@ void GameApp::processInput() {
         return;
     }
 
+    if (CheckCollisionPointRec(mouse, Rectangle{285, 82, 82, 38})) {
+        restartPlayback();
+        return;
+    } else if (CheckCollisionPointRec(mouse, Rectangle{375, 82, 70, 38})) {
+        stepPlayback(-1);
+        return;
+    } else if (CheckCollisionPointRec(mouse, Rectangle{453, 82, 82, 38})) {
+        animationPlaying = !animationPlaying;
+        return;
+    } else if (CheckCollisionPointRec(mouse, Rectangle{543, 82, 70, 38})) {
+        stepPlayback(1);
+        return;
+    }
+
     bool isSearchLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
         levelManager.getLevel(currentLevelIndex).number == 1;
@@ -409,16 +452,18 @@ void GameApp::update(float deltaTime) {
         }
     }
 
-    if (currentEvent < 0 || currentEvent >= events.size()) {
+    if (!animationPlaying || events.size() == 0) {
         return;
     }
     eventTimer += deltaTime;
     if (eventTimer >= 0.55f) {
-        Event& event = events.get(currentEvent);
-        highlightedNodeId = event.nodeId;
-        currentEvent++;
-        if (currentEvent >= events.size()) {
-            currentEvent = -1;
+        if (nextEvent < events.size()) {
+            currentEvent = nextEvent;
+            Event& event = events.get(currentEvent);
+            highlightedNodeId = event.nodeId;
+            nextEvent++;
+        } else {
+            animationPlaying = false;
         }
         eventTimer = 0.0f;
     }
@@ -446,6 +491,7 @@ void GameApp::draw() {
     DrawText("VAULT HEIST", 24, 22, 30, Color{240, 220, 170, 255});
     DrawText("Tree Lab - GUI mock connected through GameModel", 285, 54, 16,
              Color{175, 190, 210, 255});
+    drawPlaybackControls();
     DrawLine(260, 80, 260, windowHeight - 24, Color{62, 76, 96, 255});
 
     if (view.viewType == MODEL_VIEW_HEAP) {
@@ -675,6 +721,10 @@ void GameApp::drawHeapView() {
         float slot = (float)(i - firstAtDepth);
         float x = 790.0f + ((slot + 0.5f) / slots - 0.5f) * 820.0f;
         float y = 190.0f + depth * 112.0f;
+        bool swapPartner = currentEvent >= 0 && currentEvent < events.size() &&
+            events.get(currentEvent).type == EV_HEAP_SWAP &&
+            i == events.get(currentEvent).otherId;
+        bool selected = i == highlightedNodeId || swapPartner;
 
         if (i > 0) {
             int parent = (i - 1) / 2;
@@ -694,7 +744,8 @@ void GameApp::drawHeapView() {
             DrawLineEx(Vector2{parentX, parentY}, Vector2{x, y}, 3.0f,
                        Color{92, 112, 138, 255});
         }
-        DrawCircleV(Vector2{x, y}, 29.0f, Color{47, 76, 112, 255});
+        DrawCircleV(Vector2{x, y}, 29.0f,
+                    selected ? Color{205, 154, 64, 255} : Color{47, 76, 112, 255});
         DrawCircleLines((int)x, (int)y, 29.0f, Color{188, 205, 226, 255});
         std::string label = std::to_string(view.heapValues[i]);
         DrawText(label.c_str(), (int)x - 15, (int)y - 9, 18,
@@ -711,7 +762,12 @@ void GameApp::drawHeapView() {
     for (int i = 0; i < view.heapValues.size(); i++) {
         int x = 290 + i * (cellWidth + gap);
         bool active = i < activeSize;
-        Color fill = active ? Color{42, 57, 78, 255} : Color{31, 39, 52, 255};
+        bool selected = i == highlightedNodeId ||
+            (currentEvent >= 0 && currentEvent < events.size() &&
+             events.get(currentEvent).type == EV_HEAP_SWAP &&
+             i == events.get(currentEvent).otherId);
+        Color fill = selected ? Color{205, 154, 64, 255} :
+            active ? Color{42, 57, 78, 255} : Color{31, 39, 52, 255};
         Color outline = active ? Color{91, 113, 143, 255} : Color{62, 70, 82, 255};
         DrawRectangle(x, 665, cellWidth, 48, fill);
         DrawRectangleLines(x, 665, cellWidth, 48, outline);
@@ -732,11 +788,47 @@ void GameApp::drawEventLog() {
     for (int i = first; i < events.size(); i++) {
         Event& event = events.get(i);
         std::string line = describeEvent(event);
-        Color color = event.type == EV_DONE
+        Color color = i == currentEvent ? Color{240, 220, 170, 255} :
+            event.type == EV_DONE
             ? Color{150, 195, 150, 255} : Color{215, 221, 232, 255};
         DrawText(line.c_str(), panelX + 16, 118 + row * 22, 14, color);
         row++;
     }
+}
+
+void GameApp::drawPlaybackControls() {
+    drawButton(Rectangle{285, 82, 82, 38}, "Restart", true);
+    drawButton(Rectangle{375, 82, 70, 38}, "Prev", events.size() > 0);
+    drawButton(Rectangle{453, 82, 82, 38}, animationPlaying ? "Pause" : "Play", true);
+    drawButton(Rectangle{543, 82, 70, 38}, "Next", events.size() > 0);
+    std::string progress = "Event ";
+    progress += std::to_string(currentEvent >= 0 ? currentEvent + 1 : 0);
+    progress += " / ";
+    progress += std::to_string(events.size());
+    DrawText(progress.c_str(), 625, 94, 14, Color{150, 165, 185, 255});
+}
+
+void GameApp::restartPlayback() {
+    if (events.size() == 0) return;
+    currentEvent = -1;
+    nextEvent = 0;
+    highlightedNodeId = -1;
+    eventTimer = 0.0f;
+    animationPlaying = true;
+}
+
+void GameApp::stepPlayback(int direction) {
+    if (events.size() == 0) return;
+    int index = currentEvent;
+    if (index < 0) index = direction < 0 ? events.size() - 1 : 0;
+    else index += direction;
+    if (index < 0) index = 0;
+    if (index >= events.size()) index = events.size() - 1;
+    currentEvent = index;
+    nextEvent = index + 1;
+    highlightedNodeId = events.get(index).nodeId;
+    eventTimer = 0.0f;
+    animationPlaying = false;
 }
 
 std::string GameApp::describeEvent(Event& event) {
@@ -744,7 +836,10 @@ std::string GameApp::describeEvent(Event& event) {
         return "Visit node " + std::to_string(event.nodeId);
     }
     if (event.type == EV_COMPARE) {
-        return "Compare at node " + std::to_string(event.nodeId);
+        std::string relation = event.code == CMP_LESS ? " < " :
+                              event.code == CMP_GREATER ? " > " : " = ";
+        return "Node " + std::to_string(event.nodeId) + relation + "target " +
+               std::to_string(event.value);
     }
     if (event.type == EV_DONE) {
         return "Action complete";
