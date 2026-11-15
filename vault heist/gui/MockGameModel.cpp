@@ -36,7 +36,7 @@ int MockGameModel::calculateSize(int id) {
     int index = findNodeIndex(id);
     if (index < 0) return 0;
     return 1 + calculateSize(view.treeNodes[index].leftId) +
-               calculateSize(view.treeNodes[index].rightId);
+        calculateSize(view.treeNodes[index].rightId);
 }
 
 void MockGameModel::refreshMetadata() {
@@ -45,6 +45,43 @@ void MockGameModel::refreshMetadata() {
         view.treeNodes[i].height = calculateHeight(id);
         view.treeNodes[i].size = calculateSize(id);
     }
+}
+
+// Returns the height of the subtree at 'id' (leaf = 1) and updates 'best' with
+// the longest path, measured in edges, that bends at any node.
+int MockGameModel::diameterWalk(int id, int& best) {
+    if (id < 0) return 0;
+    int index = findNodeIndex(id);
+    if (index < 0) return 0;
+    int leftHeight = diameterWalk(view.treeNodes[index].leftId, best);
+    int rightHeight = diameterWalk(view.treeNodes[index].rightId, best);
+    if (leftHeight + rightHeight > best) best = leftHeight + rightHeight;
+    return 1 + (leftHeight > rightHeight ? leftHeight : rightHeight);
+}
+
+// mode 0 = preorder, 1 = inorder, 2 = postorder.
+void MockGameModel::traverseWalk(int id, int mode, EventLog& events) {
+    int index = findNodeIndex(id);
+    if (index < 0) return;
+    int leftId = view.treeNodes[index].leftId;
+    int rightId = view.treeNodes[index].rightId;
+    if (mode == 0) addVisit(id, events);
+    traverseWalk(leftId, mode, events);
+    if (mode == 1) addVisit(id, events);
+    traverseWalk(rightId, mode, events);
+    if (mode == 2) addVisit(id, events);
+}
+
+std::string MockGameModel::visitSummary(std::string name, EventLog& events) {
+    std::string text = name + ":";
+    bool first = true;
+    for (int i = 0; i < events.size(); i++) {
+        if (events.get(i).type != EV_VISIT) continue;
+        text += first ? " " : ", ";
+        text += std::to_string(events.get(i).value);
+        first = false;
+    }
+    return text;
 }
 
 void MockGameModel::removeNodeRecord(int id) {
@@ -130,6 +167,36 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         return true;
     }
 
+    if (scenarioId == 13) {
+        // Act 1.3: fixed 9-room tree. The longest path bends at node 3, not at the root.
+        // id, value, left, right, parent
+        int rows[9][5] = {
+            {1, 40,  2,  3, -1},
+            {2, 15, -1, -1,  1},
+            {3, 60,  4,  5,  1},
+            {4, 30,  6, -1,  3},
+            {5, 80, -1,  7,  3},
+            {6, 20, -1,  8,  4},
+            {7, 70,  9, -1,  5},
+            {8, 25, -1, -1,  6},
+            {9, 75, -1, -1,  7}
+        };
+        for (int i = 0; i < 9; i++) {
+            ViewNode node;
+            node.id = rows[i][0];
+            node.value = rows[i][1];
+            node.leftId = rows[i][2];
+            node.rightId = rows[i][3];
+            node.parentId = rows[i][4];
+            view.treeNodes.push(node);
+        }
+        view.viewType = MODEL_VIEW_TREE;
+        refreshMetadata();
+        message = "Blueprint tree loaded for the height and diameter challenge";
+        events.clear();
+        return true;
+    }
+
     ViewNode node;
     node.id = 1; node.value = 50; node.leftId = 2; node.rightId = 3;
     node.parentId = -1; node.height = 3; node.size = 5;
@@ -162,27 +229,39 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
 }
 
 bool MockGameModel::performAction(int action, int value, int secondValue,
-                                  EventLog& events) {
+    EventLog& events) {
     (void)secondValue;
     events.clear();
 
     if (action == ACTION_TRAVERSE_PREORDER) {
-        addVisit(1, events); addVisit(2, events); addVisit(3, events);
-        addVisit(4, events); addVisit(5, events);
-        message = "Preorder: 50, 30, 70, 60, 90";
-    } else if (action == ACTION_TRAVERSE_INORDER) {
-        addVisit(2, events); addVisit(1, events); addVisit(4, events);
-        addVisit(3, events); addVisit(5, events);
-        message = "Inorder: 30, 50, 60, 70, 90";
-    } else if (action == ACTION_TRAVERSE_POSTORDER) {
-        addVisit(2, events); addVisit(4, events); addVisit(5, events);
-        addVisit(3, events); addVisit(1, events);
-        message = "Postorder: 30, 60, 90, 70, 50";
-    } else if (action == ACTION_TRAVERSE_LEVEL_ORDER) {
-        addVisit(1, events); addVisit(2, events); addVisit(3, events);
-        addVisit(4, events); addVisit(5, events);
-        message = "Level order: 50, 30, 70, 60, 90";
-    } else if (action == ACTION_SEARCH) {
+        traverseWalk(findRootId(), 0, events);
+        message = visitSummary("Preorder", events);
+    }
+    else if (action == ACTION_TRAVERSE_INORDER) {
+        traverseWalk(findRootId(), 1, events);
+        message = visitSummary("Inorder", events);
+    }
+    else if (action == ACTION_TRAVERSE_POSTORDER) {
+        traverseWalk(findRootId(), 2, events);
+        message = visitSummary("Postorder", events);
+    }
+    else if (action == ACTION_TRAVERSE_LEVEL_ORDER) {
+        DynArray<int> queue;
+        int head = 0;
+        int rootId = findRootId();
+        if (rootId >= 0) queue.push(rootId);
+        while (head < queue.size()) {
+            int currentId = queue[head];
+            head++;
+            addVisit(currentId, events);
+            int index = findNodeIndex(currentId);
+            if (index < 0) continue;
+            if (view.treeNodes[index].leftId >= 0) queue.push(view.treeNodes[index].leftId);
+            if (view.treeNodes[index].rightId >= 0) queue.push(view.treeNodes[index].rightId);
+        }
+        message = visitSummary("Level order", events);
+    }
+    else if (action == ACTION_SEARCH) {
         int currentId = findRootId();
         while (currentId >= 0) {
             int index = findNodeIndex(currentId);
@@ -193,9 +272,11 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
             event.value = value;
             if (view.treeNodes[index].value < value) {
                 event.code = CMP_LESS;
-            } else if (view.treeNodes[index].value > value) {
+            }
+            else if (view.treeNodes[index].value > value) {
                 event.code = CMP_GREATER;
-            } else {
+            }
+            else {
                 event.code = CMP_EQUAL;
             }
             events.add(event);
@@ -203,10 +284,11 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
                 break;
             }
             currentId = event.code == CMP_LESS ? view.treeNodes[index].rightId :
-                                                 view.treeNodes[index].leftId;
+                view.treeNodes[index].leftId;
         }
         message = "Mock search path for " + std::to_string(value);
-    } else if (action == ACTION_INSERT) {
+    }
+    else if (action == ACTION_INSERT) {
         int currentId = findRootId();
         int parentId = -1;
         int side = SIDE_NONE;
@@ -230,7 +312,8 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
             if (value < view.treeNodes[index].value) {
                 side = SIDE_LEFT;
                 currentId = view.treeNodes[index].leftId;
-            } else {
+            }
+            else {
                 side = SIDE_RIGHT;
                 currentId = view.treeNodes[index].rightId;
             }
@@ -258,7 +341,8 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
         events.add(event);
         refreshMetadata();
         message = "Mock BST inserted " + std::to_string(value);
-    } else if (action == ACTION_DELETE) {
+    }
+    else if (action == ACTION_DELETE) {
         int currentId = findRootId();
         int targetId = -1;
         while (currentId >= 0) {
@@ -278,7 +362,7 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
             }
             events.add(compare);
             currentId = compare.code == CMP_LESS ? view.treeNodes[index].rightId :
-                                                   view.treeNodes[index].leftId;
+                view.treeNodes[index].leftId;
         }
         if (targetId < 0) {
             message = "Key not found; nothing was deleted";
@@ -320,7 +404,8 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
                 if (view.treeNodes[parentIndex].leftId == targetId) {
                     view.treeNodes[parentIndex].leftId = childId;
                     side = SIDE_LEFT;
-                } else {
+                }
+                else {
                     view.treeNodes[parentIndex].rightId = childId;
                     side = SIDE_RIGHT;
                 }
@@ -340,14 +425,27 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
         removeNodeRecord(targetId);
         refreshMetadata();
         message = "Mock BST deleted " + std::to_string(value);
-    } else if (action == ACTION_RANGE_QUERY) {
+    }
+    else if (action == ACTION_RANGE_QUERY) {
         if (value > secondValue) {
             message = "Low value must not exceed high value";
             return false;
         }
         collectRange(findRootId(), value, secondValue, events);
         message = "Mock BST range query complete";
-    } else {
+    }
+    else if (action == ACTION_DIAMETER) {
+        // Contract: the answer travels in EV_DONE.value (longest path in edges).
+        int best = 0;
+        diameterWalk(findRootId(), best);
+        Event done;
+        done.type = EV_DONE;
+        done.value = best;
+        events.add(done);
+        message = "Mock diameter computed";
+        return true;
+    }
+    else {
         message = "This mock action is not wired yet";
         return false;
     }

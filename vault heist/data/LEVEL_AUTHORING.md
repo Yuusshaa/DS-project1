@@ -35,6 +35,9 @@ nested objects or arrays inside a level.
   Scenario `31` is reserved for Act 3.1: it must load a fixed, deterministic
   five-node tree (50 with children 30 and 70; 30 -> 20 -> 10 on the left) whose
   balance factor is +2 at 50 and +2 at 30. Heights follow the leaf = 1 rule.
+  Scenario `13` is reserved for Act 1.3: a fixed nine-room tree (ids 1-9, see CONTRACT.md)
+  whose diameter bends at room 3. The GUI derives optimal steps (rooms + 1) and the alarm
+  capacity from the model's postorder, so the level needs no `optimalSteps`.
 - `targetValue`: optional target for levels that search or compare a key.
 - `rangeLow` and `rangeHigh`: optional inclusive range bounds for range-query
   levels.

@@ -13,6 +13,9 @@ private:
     int calculateHeight(int id);
     int calculateSize(int id);
     void refreshMetadata();
+    int diameterWalk(int id, int& best);
+    void traverseWalk(int id, int mode, EventLog& events);
+    std::string visitSummary(std::string name, EventLog& events);
     void removeNodeRecord(int id);
     void addVisit(int id, EventLog& events);
     void collectRange(int id, int low, int high, EventLog& events);
@@ -21,7 +24,7 @@ public:
     MockGameModel();
     bool loadScenario(int scenarioId, EventLog& events);
     bool performAction(int action, int value, int secondValue,
-                       EventLog& events);
+        EventLog& events);
     void copyView(ModelView& output);
     std::string statusText();
 };

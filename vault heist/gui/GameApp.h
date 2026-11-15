@@ -31,10 +31,12 @@ private:
     DynArray<int> expectedCompareCodes;
     DynArray<int> skippedSubtreeRoots;
     DynArray<int> balanceFound;
+    DynArray<int> enteredHeights;   // Act 1.3: answer given per postorder room, -1 = not yet
     DynArray<GuiNodePosition> positions;
     std::string message;
     std::string sandboxValueInput;
     std::string sandboxSecondInput;
+    std::string answerInput;        // Act 1.3: digits typed by the player
     int windowWidth;
     int windowHeight;
     int screenState; // 0=menu, 1=campaign, 2=level, 3=result
@@ -51,6 +53,10 @@ private:
     Event pendingInsertEvent;
     DynArray<Event> pendingDeleteEvents;
     int deleteTarget;
+    int pendingNodeId;              // Act 1.3: room waiting for a typed height
+    int heightPhase;                // Act 1.3: 0 idle, 1 entering heights, 2 reporting diameter
+    int expectedDiameter;           // Act 1.3: answer supplied by the model
+    int heightOptimalSteps;         // Act 1.3: rooms + 1 diameter report
     int expectedDeleteCase;
     int rangeLow;
     int rangeHigh;
@@ -67,6 +73,7 @@ private:
     bool deleteCasePending;
     bool rangeChallenge;
     bool balanceChallenge;
+    bool heightChallenge;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
@@ -86,6 +93,14 @@ private:
     void startDeleteChallenge(int target);
     void startRangeChallenge(int low, int high);
     void startBalanceChallenge();
+    void startHeightChallenge();
+    void handleHeightClick(int id);
+    void submitHeightAnswer();
+    void heightPenalty(std::string text);
+    void finishHeightLevel(bool answeredAll);
+    int enteredHeightFor(int id);
+    bool isLevel(int act, int number);
+    void drawHeightPanel();
     void selectDeleteCase(int selectedCase);
     void handleNodeClick(int id);
     std::string traversalName(int action);

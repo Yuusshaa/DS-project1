@@ -60,13 +60,14 @@ struct ModelView {
 #define ACTION_HEAPIFY 10
 #define ACTION_EXTRACT_MAX 11
 #define ACTION_HEAP_SORT 12
+#define ACTION_DIAMETER 13
 
 class GameModel {
 public:
     virtual ~GameModel() {}
     virtual bool loadScenario(int scenarioId, EventLog& events) = 0;
     virtual bool performAction(int action, int value, int secondValue,
-                               EventLog& events) = 0;
+        EventLog& events) = 0;
     virtual void copyView(ModelView& output) = 0;
     virtual std::string statusText() = 0;
 };
