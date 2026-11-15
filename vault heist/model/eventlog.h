@@ -52,4 +52,8 @@ public:
         }
         return total;
     }
+
+    int countAlarmSteps() {
+        return countAlarm();
+    }
 };

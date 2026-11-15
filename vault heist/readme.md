@@ -1,80 +1,75 @@
 # Vault Heist
 
-Vault Heist is a C++ data-structures learning project. Its model implements
-binary trees, binary search trees, AVL trees, max heaps, and heap sort. The
-Raylib GUI currently remains a mock prototype.
+Vault Heist is a C++ data structures learning game built with Raylib. It
+visualizes binary trees, BSTs, AVL trees, Max Heaps, and Heap Sort.
 
-## Project decisions
+## Current status
 
-- Target IDE/build: Visual Studio Community 2026, x64, MSBuild, C++20.
-- CMake is not used; see [DECISIONS.md](./DECISIONS.md).
-- Raylib 6.2.0 is expected under `E:\vcpkg\installed\x64-windows`.
-- The model and tests use C++11-compatible code.
-- The project implements its own data structures and does not use STL
-  containers, enums, or global variables.
+The GUI prototype draws a sample BST and plays traversal/search events from
+`MockGameModel`. The mock is temporary. Yusha's real model must implement
+`model/GameModel.h` before it is used for the final demonstration.
 
-## Build and run the tests
+## Build setup
 
-Open a PowerShell terminal in the `vault heist` project root. With MinGW
-`g++` available on `PATH`, compile and run the tests:
+- Visual Studio Community 2026
+- x64 platform
+- C++20
+- Raylib 6.2.0 from the existing vcpkg installation
+- No CMake
 
-```powershell
-g++ -std=c++11 -Wall -Wextra -I model -I test test/binarytreetset.cpp -o test/binarytreetset-run.exe
-.\test\binarytreetset-run.exe
-
-g++ -std=c++11 -Wall -Wextra -I model -I test test/test_bst.cpp -o test/test-bst-run.exe
-.\test\test-bst-run.exe
-
-g++ -std=c++11 -Wall -Wextra -I model -I test test/test_gamemodel.cpp -o test/test-gamemodel-run.exe
-.\test\test-gamemodel-run.exe
-```
-
-The test files print a `Passed: ... Failed: ...` summary.
-
-## Build and run the benchmarks
-
-Compile and run the benchmark suite from the project root:
-
-```powershell
-g++ -std=c++11 -O2 -Wall -Wextra -I model benchmarks/bench.cpp -o benchmarks/bench.exe
-.\benchmarks\bench.exe
-```
-
-To save a fresh results file using PowerShell:
-
-```powershell
-.\benchmarks\bench.exe | Out-File -Encoding utf8 docs/benchmark_results.txt
-```
-
-Recorded results are in [docs/benchmark_results.txt](./docs/benchmark_results.txt).
-
-## Run the game (TODO: GUI owner)
-
-The GUI prototype currently uses `MockGameModel`. The Visual Studio solution
-and project files are not present in this checkout, so the GUI owner still
-needs to add the game target and connect the real model.
-
-Planned controls: **Space** play/pause, **Left/Right** step, **Z** undo,
-**H** hint, **Esc** menu, mouse wheel to zoom, and drag to pan. These controls
-are not implemented in the current mock GUI.
-
-## Folder layout
+The project currently expects Raylib here:
 
 ```text
-model/        Data structures, validation, serialization, and GameModel
-gui/          Raylib application and temporary mock model
-test/         Model and integration tests
-benchmarks/   Section 10 benchmark program
-docs/         Contract, reports, and benchmark results
-data/levels/  Planned JSON level data (not present yet)
+E:\vcpkg\installed\x64-windows
 ```
 
-## Submission
+If Raylib is installed elsewhere, edit `RaylibRoot` in `VaultHeist.vcxproj`.
 
-Name the submission zip:
+## Build and run
+
+1. Open `VaultHeist.slnx` in Visual Studio.
+2. Select **Debug** and **x64** in the toolbar.
+3. Choose **Build > Build Solution** or press **Ctrl+Shift+B**.
+4. Press **F5** to run with the debugger, or **Ctrl+F5** to run without it.
+
+The project copies the Raylib runtime DLLs beside the executable after a
+successful build.
+
+If a command-line build reports `LNK1101` for `MSPDB140.DLL`, open an x64
+Visual Studio Developer Command Prompt in this folder and run:
 
 ```text
-25I-XXXX_25I-XXXX_Section.zip
+msbuild VaultHeist.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64 /p:PreferredToolArchitecture=x64
 ```
 
-Replace each `XXXX` with the corresponding student identifier.
+## Controls
+
+- Select **Campaign**, then start level 1.1.
+- Click a **Quiz** button to start that traversal challenge, then click rooms
+  in the requested order.
+- Click **Search 60** to show a sample BST search path.
+- Click **Reset level** to restore the sample tree and counters.
+- From the main menu, open **Sandbox**, focus the value field, and type an
+  integer. Use Search, Insert, Delete, or Range Query; enter the range high
+  value in the second field. Press Enter to repeat the last operation.
+- Use **Reset demo** in the Sandbox to restore its starting tree.
+- Use **Escape** to return to the previous menu.
+- Close the window to exit.
+
+## Course restrictions
+
+The project implements its required data structures itself. It does not use
+STL containers, enums, or global variables. `std::string` and Raylib are used
+for text and GUI work. AVL leaf height is 1; an empty child has height 0.
+
+## Adding levels
+
+Level definitions live in `data/levels.json`. See
+`data/LEVEL_AUTHORING.md` for the level format and workflow. Add one flat object to its
+`levels` array with `act`, `number`, `title`, `concept`, `objective`, and
+`implemented`. `scenarioId`, `optimalSteps`, and `alarmCapacity` are optional;
+they default to scenario 1, the number of expected visits, and the calculated
+alarm limit. Set `implemented` to `true` only after that level's model action
+and GUI flow are ready. The campaign unlocks implemented levels in order after
+the previous level earns at least one star. Stars and best scores are saved in
+`campaign_progress.dat` in the application's working directory.
