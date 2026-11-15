@@ -80,6 +80,17 @@ private:
         message = event.note;
     }
 
+    void finishResult(EventLog& events, const char* note, int nodeId,
+                      int value) {
+        Event event;
+        event.type = EV_DONE;
+        event.nodeId = nodeId;
+        event.value = value;
+        event.setNote(note);
+        events.add(event);
+        message = event.note;
+    }
+
     // Keep statusText synchronized with the last completed event batch.
     void updateStatus(EventLog& events, const char* fallback) {
         for (int i = events.size() - 1; i >= 0; i--) {
@@ -154,7 +165,8 @@ public:
     }
 
     bool loadScenario(int scenarioId, EventLog& events) {
-        if (scenarioId < 1 || scenarioId > 6) {
+        if ((scenarioId < 1 || scenarioId > 6) && scenarioId != 12 &&
+            scenarioId != 13 && scenarioId != 25 && scenarioId != 31) {
             finish(events, "Unknown scenario");
             return false;
         }
@@ -199,13 +211,52 @@ public:
             for (int key = 1; key <= 10; key++) {
                 bst.insert(key, buildEvents);
             }
-        } else {
+        } else if (scenarioId == 6) {
             mode = MODE_AVL;
             for (int key = 1; key <= 10; key++) {
                 avlTree.insert(key, buildEvents);
             }
             avlTree.totalRotations = 0;
             avlTree.lastRotations = 0;
+        } else if (scenarioId == 12) {
+            mode = MODE_BINARY;
+            binaryTree.root = binaryTree.createNode(40);
+            TreeNode* left = binaryTree.createNode(20);
+            TreeNode* right = binaryTree.createNode(70);
+            binaryTree.setLeft(binaryTree.root, left);
+            binaryTree.setRight(binaryTree.root, right);
+            binaryTree.setLeft(left, binaryTree.createNode(10));
+            binaryTree.setRight(left, binaryTree.createNode(30));
+            binaryTree.setLeft(right, binaryTree.createNode(60));
+            binaryTree.setRight(right, binaryTree.createNode(90));
+        } else if (scenarioId == 13) {
+            mode = MODE_BINARY;
+            binaryTree.root = binaryTree.createNode(50);
+            TreeNode* left = binaryTree.createNode(30);
+            TreeNode* leftLeft = binaryTree.createNode(20);
+            TreeNode* right = binaryTree.createNode(70);
+            binaryTree.setLeft(binaryTree.root, left);
+            binaryTree.setLeft(left, leftLeft);
+            binaryTree.setLeft(leftLeft, binaryTree.createNode(10));
+            binaryTree.setRight(left, binaryTree.createNode(40));
+            binaryTree.setRight(binaryTree.root, right);
+            binaryTree.setLeft(right, binaryTree.createNode(60));
+            TreeNode* farRight = binaryTree.createNode(90);
+            binaryTree.setRight(right, farRight);
+            binaryTree.setRight(farRight, binaryTree.createNode(100));
+        } else if (scenarioId == 25) {
+            mode = MODE_BST;
+        } else {
+            mode = MODE_BINARY;
+            binaryTree.root = binaryTree.createNode(50);
+            TreeNode* left = binaryTree.createNode(30);
+            TreeNode* right = binaryTree.createNode(70);
+            TreeNode* leftLeft = binaryTree.createNode(20);
+            TreeNode* deepest = binaryTree.createNode(10);
+            binaryTree.setLeft(binaryTree.root, left);
+            binaryTree.setRight(binaryTree.root, right);
+            binaryTree.setLeft(left, leftLeft);
+            binaryTree.setLeft(leftLeft, deepest);
         }
 
         finish(events, "Scenario loaded");
@@ -214,6 +265,51 @@ public:
 
     bool performAction(int action, int value, int secondValue,
                        EventLog& events) {
+        if (action == ACTION_HEIGHT) {
+            BinaryTree* tree = treeForMode();
+            if (tree == 0) {
+                return actionUnavailable(events);
+            }
+            TreeNode* node = tree->findById(tree->root, value);
+            if (node == 0) {
+                finishResult(events, "Node ID not found", -1, 0);
+                return false;
+            }
+            finishResult(events, "Height calculated", -1,
+                         tree->computeHeight(node));
+            return true;
+        }
+
+        if (action == ACTION_LCA) {
+            BinaryTree* tree = treeForMode();
+            if (tree == 0) {
+                return actionUnavailable(events);
+            }
+            TreeNode* first = tree->findById(tree->root, value);
+            TreeNode* second = tree->findById(tree->root, secondValue);
+            if (first == 0 || second == 0) {
+                finishResult(events, "Node ID not found", -1, 0);
+                return false;
+            }
+            TreeNode* ancestor = tree->lca(tree->root, value, secondValue);
+            int pathLength = tree->pathLength(value, secondValue);
+            if (ancestor == 0 || pathLength < 0) {
+                finishResult(events, "Could not compute LCA", -1, 0);
+                return false;
+            }
+            finishResult(events, "LCA calculated", ancestor->id, pathLength);
+            return true;
+        }
+
+        if (action == ACTION_MIRROR) {
+            if (mode != MODE_BINARY) {
+                return actionUnavailable(events);
+            }
+            binaryTree.mirror(binaryTree.root);
+            finish(events, "Tree mirrored");
+            return true;
+        }
+
         if (action == ACTION_TRAVERSE_PREORDER ||
             action == ACTION_TRAVERSE_INORDER ||
             action == ACTION_TRAVERSE_POSTORDER ||
@@ -472,5 +568,28 @@ public:
         heapBuilt = restoredHeapBuilt;
         message = "Snapshot restored";
         return true;
+    }
+
+    std::string serialize() override {
+        DynArray<char> snapshot;
+        saveSnapshot(snapshot);
+        std::string output;
+        for (int i = 0; i + 1 < snapshot.size(); i++) {
+            output += snapshot[i];
+        }
+        return output;
+    }
+
+    bool deserialize(const std::string& data) override {
+        if (data.find('\0') != std::string::npos) {
+            message = "Invalid snapshot";
+            return false;
+        }
+        DynArray<char> snapshot;
+        for (std::size_t i = 0; i < data.size(); i++) {
+            snapshot.push(data[i]);
+        }
+        snapshot.push('\0');
+        return restoreSnapshot(snapshot);
     }
 };

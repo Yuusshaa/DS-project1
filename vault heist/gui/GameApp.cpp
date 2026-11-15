@@ -95,7 +95,7 @@ void GameApp::runAction(int action, int value, int secondValue) {
 }
 
 void GameApp::loadCurrentLevel() {
-    int scenarioId = 1;
+    int scenarioId = 2;
     if (currentLevelIndex >= 0 && currentLevelIndex < levelManager.count()) {
         LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
         scenarioId = level.scenarioId;
@@ -246,7 +246,7 @@ void GameApp::startInsertChallenge(int target) {
     }
     if (!hasInsert || expectedRoute.size() == 0) {
         int scenarioId = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count()
-            ? levelManager.getLevel(currentLevelIndex).scenarioId : 1;
+            ? levelManager.getLevel(currentLevelIndex).scenarioId : 2;
         EventLog resetEvents;
         model.loadScenario(scenarioId, resetEvents);
         copyViewData(challengeStartView, view);
@@ -329,7 +329,7 @@ void GameApp::startDeleteChallenge(int target) {
     }
     if (expectedRoute.size() == 0 || pendingDeleteEvents.size() == 0) {
         int scenarioId = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count()
-            ? levelManager.getLevel(currentLevelIndex).scenarioId : 1;
+            ? levelManager.getLevel(currentLevelIndex).scenarioId : 2;
         EventLog resetEvents;
         model.loadScenario(scenarioId, resetEvents);
         copyViewData(challengeStartView, view);

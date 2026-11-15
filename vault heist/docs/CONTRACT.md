@@ -48,7 +48,7 @@ defaults.
 | `EV_MARK_SORTED` | N=sorted array index; V=value at that index. |
 | `EV_HEAP_SIZE_CHANGE` | Old=active heap size before change; New=active heap size after change. |
 | `EV_HEAP_SORT_COMPLETE` | Signals completion; read the final array from the model. |
-| `EV_DONE` | Ends the batch; `note` may summarize the result. |
+| `EV_DONE` | Ends the batch; result actions may also set N and V as specified below; `note` summarizes the result. |
 
 ## Notes for GUI
 
@@ -65,10 +65,59 @@ defaults.
   saved version to persist.
 - Heap event node IDs are array indices, not tree IDs.
 
+## Action codes and results
+
+Action identifiers are integer macros in `model/GameModel.h`:
+
+| Code | Action | Parameters and result |
+|---|---|---|
+| 13 | `ACTION_DIAMETER` | Whole tree; `EV_DONE.value` is the diameter in edges. |
+| 14 | `ACTION_HEIGHT` | `value` is a node ID; `EV_DONE.value` is its height (leaf = 1). |
+| 15 | `ACTION_LCA` | `value` and `secondValue` are node IDs; `EV_DONE.nodeId` is the LCA ID and `EV_DONE.value` is their path length in edges. |
+| 16 | `ACTION_MIRROR` | Mirror the binary tree and refresh its displayed heights. |
+| 17 | `ACTION_ROTATE_LEFT` | `value` is the pivot ID; perform one left primitive rotation, no auto-rebalance; `EV_ROTATE.code = ROT_RR`. |
+| 18 | `ACTION_ROTATE_RIGHT` | `value` is the pivot ID; perform one right primitive rotation, no auto-rebalance; `EV_ROTATE.code = ROT_LL`. |
+| 19 | `ACTION_ROTATION_CASE` | Query; `EV_DONE.nodeId` is the lowest unbalanced node and `EV_DONE.value` is `ROT_LL`, `ROT_RR`, `ROT_LR`, `ROT_RL`, or `ROT_NONE`. |
+| 20 | `ACTION_KTH` | `value` is 1-based k; `EV_DONE.nodeId` is the result node and `EV_DONE.value` is its key. |
+| 21 | `ACTION_RANK` | `value` is a key; `EV_DONE.value` is the number of keys less than or equal to it and `nodeId = -1`. |
+| 22 | `ACTION_HEAP_SWAP` | `value` and `secondValue` are indexes; only swap an active parent/child pair when the child value is strictly larger. |
+| 23 | `ACTION_IS_MAX_HEAP` | Query; `EV_DONE.value` is 1 for a max heap and 0 otherwise. |
+
+`EV_DONE` scalar results use `value`; node results use `nodeId`, with `-1`
+when there is no result node. Missing or invalid nodes are rejected with
+`performAction == false` and a short status message. `ACTION_HEAPIFY` takes
+the index to sift down in `value`. `ACTION_EXTRACT_MAX` performs exactly one
+extraction: swap the root with the last active element, shrink the active
+heap, mark the extracted element sorted, then sift down.
+
+`GameModel` also exposes virtual `serialize()` and `deserialize(const
+std::string&)` methods. Tree snapshots use preorder with `#` null markers;
+heap snapshots include the active size and the array. Loaded tree metadata is
+recomputed.
+
+## Scenario fixtures
+
+IDs are stable within each loaded scenario and are allocated in the order
+listed below. The GUI reads the model view and does not hardcode these trees.
+
+- **12 — reconstruction:** binary tree `40(20(10,30),70(60,90))`, seven
+  distinct keys. IDs: 1=40, 2=20, 3=70, 4=10, 5=30, 6=60, 7=90.
+- **13 — height/LCA:** binary tree rooted at 50. Its left branch is
+  `30(20(10,null),40)` and its right branch is `70(60,90(null,100))`.
+  This has nine distinct keys and height 4. IDs are assigned in construction
+  order: 1=50, 2=30, 3=20, 4=70, 5=10, 6=40, 7=60, 8=90, 9=100.
+- **25 — degeneration:** empty BST; the level setup inserts its sorted keys.
+- **31 — balance badges:** manually built binary tree
+  `50(30(20(10,null),null),70)`, intentionally unbalanced for the badge
+  challenge. Heights and subtree sizes are derived from its links; insertion
+  and deletion do not auto-rebalance this fixture.
+
 ## Model interface
 
 The GUI calls only `GameModel` from `model/GameModel.h`: `loadScenario`,
 `performAction`, `copyView`, and `statusText`. The model returns a `ModelView`
 snapshot containing tree IDs and links or heap values and active size.
-`RealGameModel` additionally offers snapshot save/restore for undo and reset.
+`RealGameModel` implements the shared interface and backs the GUI. Scenario
+fixtures and operations are supplied by the model rather than duplicated in
+the GUI.
 

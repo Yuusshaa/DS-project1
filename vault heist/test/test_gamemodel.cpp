@@ -11,6 +11,15 @@ int findValue(ModelView& view, int value) {
     return -1;
 }
 
+int findNodeIndex(ModelView& view, int id) {
+    for (int i = 0; i < view.treeNodes.size(); i++) {
+        if (view.treeNodes[i].id == id) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 void testScenarios(Tally& T) {
     RealGameModel model;
     EventLog events;
@@ -35,6 +44,87 @@ void testScenarios(Tally& T) {
 
     events.clear();
     CHECK(model.loadScenario(7, events) == false);
+}
+
+void testActOneScenariosAndActions(Tally& T) {
+    RealGameModel model;
+    EventLog events;
+    ModelView view;
+
+    CHECK(model.loadScenario(12, events) == true);
+    model.copyView(view);
+    CHECK(view.treeNodes.size() == 7);
+    CHECK(view.treeNodes[0].value == 40);
+    CHECK(view.treeNodes[0].leftId == 2);
+    CHECK(view.treeNodes[0].rightId == 3);
+
+    events.clear();
+    CHECK(model.performAction(ACTION_HEIGHT, 1, 0, events) == true);
+    Event& heightResult = events.get(events.size() - 1);
+    CHECK(heightResult.type == EV_DONE);
+    CHECK(heightResult.nodeId == -1);
+    CHECK(heightResult.value == 3);
+
+    events.clear();
+    CHECK(model.performAction(ACTION_HEIGHT, 4, 0, events) == true);
+    CHECK(events.get(events.size() - 1).value == 1);
+
+    events.clear();
+    CHECK(model.performAction(ACTION_LCA, 4, 5, events) == true);
+    Event& lcaResult = events.get(events.size() - 1);
+    CHECK(lcaResult.type == EV_DONE);
+    CHECK(lcaResult.nodeId == 2);
+    CHECK(lcaResult.value == 2);
+
+    events.clear();
+    CHECK(model.performAction(ACTION_LCA, 4, 99, events) == false);
+    CHECK(model.statusText() == "Node ID not found");
+    CHECK(events.get(events.size() - 1).type == EV_DONE);
+
+    events.clear();
+    CHECK(model.performAction(ACTION_MIRROR, 0, 0, events) == true);
+    model.copyView(view);
+    CHECK(view.treeNodes[0].leftId == 3);
+    CHECK(view.treeNodes[0].rightId == 2);
+    int leftIndex = findNodeIndex(view, 2);
+    CHECK(leftIndex >= 0);
+    if (leftIndex >= 0) {
+        CHECK(view.treeNodes[leftIndex].leftId == 5);
+        CHECK(view.treeNodes[leftIndex].rightId == 4);
+    }
+    CHECK(events.get(events.size() - 1).type == EV_DONE);
+
+    CHECK(model.loadScenario(13, events) == true);
+    model.copyView(view);
+    CHECK(view.treeNodes.size() == 9);
+    events.clear();
+    CHECK(model.performAction(ACTION_HEIGHT, 1, 0, events) == true);
+    CHECK(events.get(events.size() - 1).value == 4);
+
+    CHECK(model.loadScenario(25, events) == true);
+    model.copyView(view);
+    CHECK(view.viewType == MODEL_VIEW_TREE);
+    CHECK(view.treeNodes.size() == 0);
+    events.clear();
+    CHECK(model.performAction(ACTION_INSERT, 10, 0, events) == true);
+    model.copyView(view);
+    CHECK(view.treeNodes.size() == 1);
+    CHECK(view.treeNodes[0].value == 10);
+
+    CHECK(model.loadScenario(31, events) == true);
+    model.copyView(view);
+    CHECK(view.treeNodes.size() == 5);
+    CHECK(view.treeNodes[0].height == 4);
+    CHECK(view.treeNodes[0].size == 5);
+
+    std::string snapshot = model.serialize();
+    CHECK(model.loadScenario(2, events) == true);
+    events.clear();
+    CHECK(model.performAction(ACTION_MIRROR, 0, 0, events) == false);
+    CHECK(model.deserialize(snapshot) == true);
+    model.copyView(view);
+    CHECK(view.treeNodes[0].value == 50);
+    CHECK(view.treeNodes[0].leftId == 2);
 }
 
 void testTreeActions(Tally& T) {
@@ -121,6 +211,7 @@ void testHeapAndSnapshots(Tally& T) {
 int main() {
     Tally T;
     testScenarios(T);
+    testActOneScenariosAndActions(T);
     testTreeActions(T);
     testHeapAndSnapshots(T);
 

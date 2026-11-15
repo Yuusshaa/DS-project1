@@ -60,6 +60,17 @@ struct ModelView {
 #define ACTION_HEAPIFY 10
 #define ACTION_EXTRACT_MAX 11
 #define ACTION_HEAP_SORT 12
+#define ACTION_DIAMETER 13
+#define ACTION_HEIGHT 14
+#define ACTION_LCA 15
+#define ACTION_MIRROR 16
+#define ACTION_ROTATE_LEFT 17
+#define ACTION_ROTATE_RIGHT 18
+#define ACTION_ROTATION_CASE 19
+#define ACTION_KTH 20
+#define ACTION_RANK 21
+#define ACTION_HEAP_SWAP 22
+#define ACTION_IS_MAX_HEAP 23
 
 class GameModel {
 public:
@@ -69,4 +80,6 @@ public:
                                EventLog& events) = 0;
     virtual void copyView(ModelView& output) = 0;
     virtual std::string statusText() = 0;
+    virtual std::string serialize() = 0;
+    virtual bool deserialize(const std::string& data) = 0;
 };

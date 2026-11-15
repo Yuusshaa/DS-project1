@@ -1,8 +1,8 @@
 #include "GameApp.h"
-#include "MockGameModel.h"
+#include "realgamemodel.h"
 
 int main() {
-    MockGameModel model;
+    RealGameModel model;
     GameApp app(model);
     app.run();
     return 0;

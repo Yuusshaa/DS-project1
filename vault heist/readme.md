@@ -5,9 +5,10 @@ visualizes binary trees, BSTs, AVL trees, Max Heaps, and Heap Sort.
 
 ## Current status
 
-The GUI prototype draws a sample BST and plays traversal/search events from
-`MockGameModel`. The mock is temporary. Yusha's real model must implement
-`model/GameModel.h` before it is used for the final demonstration.
+The GUI now constructs `RealGameModel`. The model exposes the agreed action
+codes and currently implements the Act 1 height, LCA, and mirror actions, plus
+scenarios 12, 13, 25, and 31. Other planned actions are being integrated in
+stages; see [docs/CONTRACT.md](./docs/CONTRACT.md) for the shared contract.
 
 ## Build setup
 
