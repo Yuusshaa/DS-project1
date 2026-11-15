@@ -99,9 +99,7 @@ copy /Y "$(RaylibRoot)\bin\glfw3.dll" "$(OutDir)"</Command>
     <ClInclude Include="model\event.h" />
     <ClInclude Include="model\eventlog.h" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="data\levels.json" />
-  </ItemGroup>
+ 
   <ItemGroup>
     <None Include="data\levels.json" />
   </ItemGroup>
