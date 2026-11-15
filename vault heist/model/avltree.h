@@ -3,7 +3,7 @@
 // Alarm: search/insert/delete cost one EV_COMPARE per room (from BST.h).
 //        kth costs one EV_VISIT per room. Never both for the same step.
 #pragma once
-#include "BST.h"
+#include "bst.h"
 
 class AVLTree : public BST {
 public:

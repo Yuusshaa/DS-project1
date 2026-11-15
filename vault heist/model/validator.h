@@ -1,8 +1,8 @@
 // model/Validator.h  -- must NOT include raylib
 // Every check returns true if OK. On failure it returns false and sets lastError.
 #pragma once
-#include "AVLTree.h"
-#include "MaxHeap.h"
+#include "avltree.h"
+#include "maxheap.h"
 
 class Validator {
 public:

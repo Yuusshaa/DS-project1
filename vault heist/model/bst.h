@@ -5,7 +5,7 @@
 //   CMP_LESS    = node key < target (go RIGHT)
 //   CMP_EQUAL   = equal
 #pragma once
-#include "Binarytree.h"
+#include "binarytree.h"
 #include "eventlog.h"
 
 class BST : public BinaryTree {

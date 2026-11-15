@@ -2,8 +2,8 @@
 // Turns trees and heaps into text (and back). Text lives in a DynArray<char>
 // that ends with '\0'. Writing it to a file is the GUI's job.
 #pragma once
-#include "BinaryTree.h"
-#include "MaxHeap.h"
+#include "binarytree.h"
+#include "maxheap.h"
 
 class SaveManager {
 public:
