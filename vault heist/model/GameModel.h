@@ -4,7 +4,7 @@
 #include "dynamicarray.h"
 #include "eventlog.h"
 
-// Snapshot data for rendering. The GUI receives values and IDs, not model links.
+// Display-only copies. The GUI cannot use these to mutate model links.
 struct ViewNode {
     int id;
     int value;
@@ -47,7 +47,7 @@ struct ModelView {
     }
 };
 
-// Action identifiers follow the project's no-enums course restriction.
+// Integer action codes comply with the no-enums rule.
 #define ACTION_TRAVERSE_PREORDER 1
 #define ACTION_TRAVERSE_INORDER 2
 #define ACTION_TRAVERSE_POSTORDER 3
@@ -64,17 +64,9 @@ struct ModelView {
 class GameModel {
 public:
     virtual ~GameModel() {}
-
-    // Load a scenario and return its events in the supplied batch.
     virtual bool loadScenario(int scenarioId, EventLog& events) = 0;
-
-    // Perform one action using its primary and secondary values.
     virtual bool performAction(int action, int value, int secondValue,
                                EventLog& events) = 0;
-
-    // Copy the current model state into display-only data for the GUI.
     virtual void copyView(ModelView& output) = 0;
-
-    // Return the status message to display after the latest operation.
     virtual std::string statusText() = 0;
 };
