@@ -185,6 +185,16 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         return true;
     }
 
+    if (scenarioId == 7) {
+        int values[8] = { 6, 3, 8, 1, 5, 2, 7, 4 };
+        view.viewType = MODEL_VIEW_HEAP;
+        view.heapSize = 8;
+        for (int i = 0; i < 8; i++) view.heapValues.push(values[i]);
+        message = "Unsorted treasures loaded for the timed heap-sort race";
+        events.clear();
+        return true;
+    }
+
     if (scenarioId == 31) {
         ViewNode node;
         node.id = 1; node.value = 50; node.leftId = 2; node.rightId = 3;
@@ -733,6 +743,46 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
         finished.nodeId = start;
         events.add(finished);
         message = "Sift-down complete";
+    }
+    else if (action == ACTION_HEAP_BUILD) {
+        if (view.viewType != MODEL_VIEW_HEAP) {
+            message = "No heap array is loaded";
+            return false;
+        }
+        Event built;
+        built.type = EV_HEAP_BUILD;
+        built.value = view.heapSize;
+        events.add(built);
+        for (int start = view.heapSize / 2 - 1; start >= 0; start--) {
+            Event started;
+            started.type = EV_HEAPIFY_START;
+            started.nodeId = start;
+            events.add(started);
+            int current = start;
+            while (true) {
+                int left = current * 2 + 1;
+                int right = current * 2 + 2;
+                int largest = current;
+                if (left < view.heapSize && view.heapValues[left] > view.heapValues[largest]) largest = left;
+                if (right < view.heapSize && view.heapValues[right] > view.heapValues[largest]) largest = right;
+                if (largest == current) break;
+                int temp = view.heapValues[current];
+                view.heapValues[current] = view.heapValues[largest];
+                view.heapValues[largest] = temp;
+                Event swapped;
+                swapped.type = EV_HEAP_SWAP;
+                swapped.nodeId = current;
+                swapped.otherId = largest;
+                swapped.value = view.heapValues[current];
+                events.add(swapped);
+                current = largest;
+            }
+            Event finished;
+            finished.type = EV_HEAPIFY_DONE;
+            finished.nodeId = start;
+            events.add(finished);
+        }
+        message = "Bottom-up max heap built";
     }
     else if (action == ACTION_EXTRACT_MAX) {
         if (view.heapSize <= 1) {

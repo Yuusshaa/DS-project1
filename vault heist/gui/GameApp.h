@@ -85,6 +85,9 @@ private:
     int heapCompletionType;
     int heapExtractCount;
     int heapExtractOptimalSteps;
+    int heapRacePhase;
+    int heapRaceExtractionCount;
+    int heapRaceOptimalSteps;
     int heightOptimalSteps;         // Act 1.3: rooms + 1 diameter report
     int expectedDeleteCase;
     int rangeLow;
@@ -112,10 +115,14 @@ private:
     bool heapCompletionReady;
     bool heapExtractChallenge;
     bool heapExtractWaiting;
+    bool heapRaceChallenge;
+    bool heapRaceWaiting;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
     float mirrorAnimationTime;
+    float heapRaceSecondsRemaining;
+    float heapRaceTimeLimit;
 
     void processInput();
     void update(float deltaTime);
@@ -151,6 +158,8 @@ private:
     void finishHeapifyChallenge(bool success);
     void startHeapExtractChallenge();
     void finishHeapExtractChallenge(bool success);
+    void startHeapRaceChallenge();
+    void finishHeapRaceChallenge(bool success);
     int enteredHeightFor(int id);
     bool isLevel(int act, int number);
     void drawHeightPanel();
@@ -174,6 +183,7 @@ private:
     void drawHeapControls();
     void drawHeapifyControls();
     void drawHeapExtractControls();
+    void drawHeapRaceControls();
     void executeSandboxAction(int action);
     void restartPlayback();
     void stepPlayback(int direction);

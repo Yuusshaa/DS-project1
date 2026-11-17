@@ -48,6 +48,9 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     heapCompletionType = 0;
     heapExtractCount = 0;
     heapExtractOptimalSteps = 7;
+    heapRacePhase = 0;
+    heapRaceExtractionCount = 0;
+    heapRaceOptimalSteps = 8;
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
     heightOptimalSteps = 0;
@@ -76,9 +79,13 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     heapCompletionReady = false;
     heapExtractChallenge = false;
     heapExtractWaiting = false;
+    heapRaceChallenge = false;
+    heapRaceWaiting = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
+    heapRaceSecondsRemaining = 0.0f;
+    heapRaceTimeLimit = 60.0f;
     message = "Starting demo";
 }
 
@@ -121,11 +128,16 @@ void GameApp::runAction(int action, int value, int secondValue) {
     heapCompletionReady = false;
     heapExtractChallenge = false;
     heapExtractWaiting = false;
+    heapRaceChallenge = false;
+    heapRaceWaiting = false;
     selectedHeapIndex = -1;
     if (action == 0) {
         heapBuildSwaps = 0;
         heapifyOperationCount = 0;
         heapExtractCount = 0;
+        heapRaceExtractionCount = 0;
+        heapRacePhase = 0;
+        heapRaceSecondsRemaining = 0.0f;
     }
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
@@ -1193,6 +1205,74 @@ void GameApp::finishHeapExtractChallenge(bool success) {
     screenState = 3;
 }
 
+void GameApp::startHeapRaceChallenge() {
+    if (!isLevel(4, 4)) return;
+    LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
+    EventLog setup;
+    if (!model.loadScenario(level.scenarioId, setup)) {
+        message = model.statusText();
+        return;
+    }
+    refreshView();
+    events.clear();
+    currentEvent = -1;
+    nextEvent = 0;
+    heapRacePhase = 0;
+    heapRaceExtractionCount = 0;
+    heapRaceOptimalSteps = level.optimalSteps > 0 ? level.optimalSteps : 8;
+    heapRaceTimeLimit = 60.0f;
+    heapRaceSecondsRemaining = heapRaceTimeLimit;
+    heapRaceChallenge = true;
+    heapRaceWaiting = false;
+    heapCompletionPending = false;
+    heapCompletionReady = false;
+    heapCompletionType = 0;
+    alarmCapacity = level.alarmCapacity > 0 ? level.alarmCapacity : 12;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    challengeActive = true;
+    challengeFinished = false;
+    animationPlaying = false;
+    message = "Build the heap, then extract every maximum before the timer expires.";
+}
+
+void GameApp::finishHeapRaceChallenge(bool success) {
+    heapRaceChallenge = false;
+    heapRaceWaiting = false;
+    challengeActive = false;
+    challengeFinished = true;
+    if (success && !heapCompletionReady) {
+        heapCompletionPending = true;
+        heapCompletionType = 4;
+        animationPlaying = true;
+        currentEvent = -1;
+        nextEvent = 0;
+        eventTimer = 0.0f;
+        message = "Heap sorted. Reviewing the final operation events...";
+        return;
+    }
+    heapCompletionReady = false;
+    if (success && alarmSteps < alarmCapacity && heapRaceSecondsRemaining > 0.0f) {
+        if (wrongClicks == 0 && alarmSteps <= heapRaceOptimalSteps) stars = 3;
+        else if (wrongClicks <= 1 && alarmSteps * 4 <= heapRaceOptimalSteps * 5) stars = 2;
+        else stars = 1;
+        score = 1000 - 10 * alarmSteps - 50 * wrongClicks -
+            (int)(heapRaceTimeLimit - heapRaceSecondsRemaining);
+        if (score < 0) score = 0;
+        message = "Race won. The treasures are sorted in ascending order.";
+    }
+    else {
+        stars = 0;
+        score = 0;
+        message = "The guards reached the vault. Retry the heap-sort race.";
+    }
+    levelManager.recordResult(currentLevelIndex, stars, score);
+    levelManager.saveProgress("campaign_progress.dat");
+    screenState = 3;
+}
+
 void GameApp::handleHeightClick(int id) {
     if (heightPhase != 1) {
         message = "All heights are in. Type the diameter and press Enter.";
@@ -1701,6 +1781,7 @@ void GameApp::copyViewData(ModelView& source, ModelView& destination) {
 
 void GameApp::processInput() {
     if (screenState == 2 && heapCompletionPending && IsKeyPressed(KEY_ESCAPE)) return;
+    if (screenState == 2 && heapRaceChallenge && IsKeyPressed(KEY_ESCAPE)) return;
     if (IsKeyPressed(KEY_ESCAPE)) {
         if (mirrorAnimationActive) runAction(0, 0, 0);
         if (screenState == 2 || screenState == 3) {
@@ -1916,6 +1997,49 @@ void GameApp::processInput() {
     bool isRotationLevel = isLevel(3, 2) || isLevel(3, 3);
     bool isHeapBuildLevel = isLevel(4, 1);
     bool isHeapifyLevel = isLevel(4, 2);
+    bool isHeapRaceLevel = isLevel(4, 4);
+    if (isHeapRaceLevel) {
+        if (heapCompletionPending || heapRaceWaiting) return;
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
+            startHeapRaceChallenge();
+            return;
+        }
+        if (heapRaceChallenge && CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
+            EventLog operationEvents;
+            events.clear();
+            int action = heapRacePhase == 0 ? ACTION_HEAP_BUILD : ACTION_EXTRACT_MAX;
+            if (!model.performAction(action, 0, 0, operationEvents)) {
+                alarmSteps++;
+                wrongClicks++;
+                message = model.statusText();
+                if (alarmSteps >= alarmCapacity) finishHeapRaceChallenge(false);
+                return;
+            }
+            alarmSteps++;
+            if (heapRacePhase == 0) {
+                heapRacePhase = 1;
+                message = "Max heap built. Let the events play, then extract each maximum.";
+            }
+            else {
+                heapRaceExtractionCount++;
+                message = "Maximum moved into the sorted region. Continue after playback.";
+            }
+            for (int i = 0; i < operationEvents.size(); i++) events.add(operationEvents.get(i));
+            refreshView();
+            currentEvent = -1;
+            nextEvent = 0;
+            eventTimer = 0.0f;
+            animationPlaying = true;
+            heapRaceWaiting = true;
+            if (heapRacePhase == 1 && view.heapSize <= 1) finishHeapRaceChallenge(true);
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 182, 220, 42 })) {
+            runAction(0, 0, 0);
+            return;
+        }
+        return;
+    }
     bool isHeapExtractLevel = isLevel(4, 3);
     if (isHeapExtractLevel) {
         if (heapCompletionPending || heapExtractWaiting) return;
@@ -2231,6 +2355,14 @@ void GameApp::update(float deltaTime) {
         }
     }
 
+    if (heapRaceChallenge && !heapCompletionPending) {
+        heapRaceSecondsRemaining -= deltaTime;
+        if (heapRaceSecondsRemaining <= 0.0f) {
+            heapRaceSecondsRemaining = 0.0f;
+            finishHeapRaceChallenge(false);
+            return;
+        }
+    }
     if (!animationPlaying || events.size() == 0) {
         return;
     }
@@ -2249,10 +2381,12 @@ void GameApp::update(float deltaTime) {
                 heapCompletionReady = true;
                 if (heapCompletionType == 1) finishHeapBuildChallenge(true);
                 else if (heapCompletionType == 2) finishHeapifyChallenge(true);
-                else finishHeapExtractChallenge(true);
+                else if (heapCompletionType == 3) finishHeapExtractChallenge(true);
+                else finishHeapRaceChallenge(true);
                 return;
             }
             if (heapExtractWaiting) heapExtractWaiting = false;
+            if (heapRaceWaiting) heapRaceWaiting = false;
         }
         eventTimer = 0.0f;
     }
@@ -2291,6 +2425,7 @@ void GameApp::draw() {
     if (view.viewType == MODEL_VIEW_HEAP) {
         if (isLevel(4, 2)) drawHeapifyControls();
         else if (isLevel(4, 3)) drawHeapExtractControls();
+        else if (isLevel(4, 4)) drawHeapRaceControls();
         else drawHeapControls();
         drawHeapView();
     }
@@ -2912,6 +3047,29 @@ void GameApp::drawHeapExtractControls() {
     DrawText(TextFormat("%i / %i steps", alarmSteps, capacity), 24, 451, 15,
         Color{ 205, 212, 224, 255 });
     DrawText(TextFormat("Errors: %i", wrongClicks), 24, 478, 15,
+        Color{ 205, 212, 224, 255 });
+}
+
+void GameApp::drawHeapRaceControls() {
+    DrawText("ACT 4.4 - HEAP-SORT RACE", 24, 55, 14, Color{ 150, 175, 205, 255 });
+    drawButton(Rectangle{ 20, 82, 220, 42 }, "Start the race", true);
+    std::string actionLabel = heapRacePhase == 0 ? "Build max heap" : "Extract maximum";
+    drawButton(Rectangle{ 20, 132, 220, 42 }, actionLabel,
+        heapRaceChallenge && !heapRaceWaiting);
+    drawButton(Rectangle{ 20, 182, 220, 42 }, "Reset level", true);
+    DrawText("Build once, then extract", 20, 242, 13, Color{ 205, 212, 224, 255 });
+    DrawText("until the array is sorted.", 20, 262, 13, Color{ 205, 212, 224, 255 });
+    DrawText(TextFormat("Extracted: %i / 7", heapRaceExtractionCount),
+        20, 292, 14, Color{ 205, 212, 224, 255 });
+    DrawText(TextFormat("Time: %i sec", (int)heapRaceSecondsRemaining),
+        20, 322, 14, Color{ 240, 220, 170, 255 });
+    DrawText("ALARM", 24, 405, 15, Color{ 150, 175, 205, 255 });
+    int capacity = alarmCapacity > 0 ? alarmCapacity : 10;
+    int alarm = alarmSteps > capacity ? capacity : alarmSteps;
+    DrawRectangle(24, 430, 210, 14, Color{ 58, 66, 78, 255 });
+    DrawRectangle(24, 430, 210 * alarm / capacity, 14,
+        Color{ 216, 117, 73, 255 });
+    DrawText(TextFormat("%i / %i operations", alarmSteps, capacity), 24, 451, 14,
         Color{ 205, 212, 224, 255 });
 }
 

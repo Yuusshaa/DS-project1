@@ -128,6 +128,16 @@ default value from `Event`.
 - The GUI requests one extraction at a time and waits for its event playback before allowing
   the next. Completion occurs when only the final sorted value remains active.
 
+## Act 4.4 timed heap-sort race
+
+- Scenario 7 loads the unsorted values `{6, 3, 8, 1, 5, 2, 7, 4}`.
+- The GUI calls `ACTION_HEAP_BUILD` (9) once, then `ACTION_EXTRACT_MAX` (11) once per
+  maximum. It waits for each event batch to play before enabling the next operation.
+- The active heap and sorted suffix stay synchronized in `ModelView`; completion occurs when
+  one sorted value remains active. The level adds a 60-second limit and a 12-operation alarm.
+- Mock implementation is the stand-in. Yusha's model must support scenario 7 and actions 9/11
+  with the same heap-event meanings before integration.
+
 ## Public model interface to finalize
 
 Before the GUI calls model operations, Yusha records exact class names,

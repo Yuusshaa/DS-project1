@@ -199,9 +199,12 @@
       "act": 4,
       "number": 4,
       "title": "Race the Guards",
-      "concept": "Heap Sort",
-      "objective": "Complete heap sort under the alarm limit.",
-      "implemented": false
+      "concept": "heap build, extract-max, heap sort",
+      "objective": "Build a max heap, then extract every maximum before the 60-second timer and alarm limit expire.",
+      "scenarioId": 7,
+      "optimalSteps": 8,
+      "alarmCapacity": 12,
+      "implemented": true
     },
     {
       "act": 4,
