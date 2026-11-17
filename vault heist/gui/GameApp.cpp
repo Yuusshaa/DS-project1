@@ -24,6 +24,10 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     lcaSecondNode = -1;
     expectedLcaNode = -1;
     expectedLcaPathLength = 0;
+    lcaPhase = 0;
+    lcaPathCurrentNode = -1;
+    lcaPathProgress = 0;
+    lcaOptimalSteps = 0;
     heightOptimalSteps = 0;
     expectedDeleteCase = 0;
     rangeLow = 0;
@@ -663,6 +667,10 @@ void GameApp::startLcaChallenge() {
     lcaSecondNode = -1;
     expectedLcaNode = -1;
     expectedLcaPathLength = 0;
+    lcaPhase = 0;
+    lcaPathCurrentNode = -1;
+    lcaPathProgress = 0;
+    lcaOptimalSteps = 0;
     expectedIndex = 0;
     alarmSteps = 0;
     wrongClicks = 0;
@@ -674,7 +682,7 @@ void GameApp::startLcaChallenge() {
     currentEvent = -1;
     nextEvent = 0;
     highlightedNodeId = -1;
-    alarmCapacity = 6;
+    alarmCapacity = 10;
     message = "Select two rooms, then click their lowest common ancestor.";
 }
 
@@ -682,7 +690,9 @@ void GameApp::finishLcaChallenge(bool correct) {
     challengeActive = false;
     challengeFinished = true;
     if (correct && alarmSteps < alarmCapacity) {
-        stars = wrongClicks == 0 ? 3 : wrongClicks == 1 ? 2 : 1;
+        if (wrongClicks == 0 && alarmSteps <= lcaOptimalSteps) stars = 3;
+        else if (wrongClicks <= 1 && alarmSteps * 4 <= lcaOptimalSteps * 5) stars = 2;
+        else stars = 1;
         score = 1000 - alarmSteps * 10 - wrongClicks * 50;
         if (score < 0) score = 0;
         Event result;
@@ -826,10 +836,10 @@ void GameApp::handleNodeClick(int id) {
     }
 
     if (lcaChallenge) {
-        if (lcaFirstNode < 0) {
+        if (lcaPhase == 0) {
             lcaFirstNode = id;
+            lcaPhase = 1;
             highlightedNodeId = id;
-            expectedIndex = 1;
             alarmSteps++;
             Event selected;
             selected.type = EV_VISIT;
@@ -839,7 +849,7 @@ void GameApp::handleNodeClick(int id) {
             events.add(selected);
             message = "First room selected. Choose a different second room.";
         }
-        else if (lcaSecondNode < 0) {
+        else if (lcaPhase == 1) {
             if (id == lcaFirstNode) {
                 alarmSteps++;
                 wrongClicks++;
@@ -848,7 +858,7 @@ void GameApp::handleNodeClick(int id) {
             }
             else {
                 lcaSecondNode = id;
-                expectedIndex = 2;
+                lcaPhase = 2;
                 alarmSteps++;
                 Event selected;
                 selected.type = EV_VISIT;
@@ -874,17 +884,72 @@ void GameApp::handleNodeClick(int id) {
                     message = "The model did not return a common ancestor.";
                     return;
                 }
+                lcaOptimalSteps = 3 + expectedLcaPathLength;
+                alarmCapacity = (3 * lcaOptimalSteps + 1) / 2 + 2;
                 message = "Now click the lowest common ancestor.";
             }
         }
-        else {
+        else if (lcaPhase == 2) {
             alarmSteps++;
-            if (id == expectedLcaNode) finishLcaChallenge(true);
+            if (id == expectedLcaNode) {
+                lcaPhase = 3;
+                lcaPathCurrentNode = lcaFirstNode;
+                lcaPathProgress = 0;
+                highlightedNodeId = id;
+                Event ancestor;
+                ancestor.type = EV_VISIT;
+                ancestor.nodeId = id;
+                int ancestorIndex = findNodeIndex(id);
+                if (ancestorIndex >= 0) ancestor.value = view.treeNodes[ancestorIndex].value;
+                events.add(ancestor);
+                currentEvent = events.size() - 1;
+                nextEvent = events.size();
+                message = "Trace the route: click adjacent rooms from the first room to the second.";
+            }
             else {
                 wrongClicks++;
                 highlightedNodeId = id;
                 if (alarmSteps >= alarmCapacity) finishLcaChallenge(false);
                 else message = "Not the lowest common ancestor. Try again.";
+            }
+        }
+        else {
+            alarmSteps++;
+            int currentIndex = findNodeIndex(lcaPathCurrentNode);
+            bool adjacent = false;
+            if (currentIndex >= 0) {
+                ViewNode& current = view.treeNodes[currentIndex];
+                adjacent = id == current.parentId || id == current.leftId || id == current.rightId;
+            }
+            if (!adjacent) {
+                wrongClicks++;
+                if (alarmSteps >= alarmCapacity) finishLcaChallenge(false);
+                else message = "That room is not connected to the current room. Stay on the path.";
+            }
+            else {
+                lcaPathCurrentNode = id;
+                lcaPathProgress++;
+                highlightedNodeId = id;
+                Event step;
+                step.type = EV_VISIT;
+                step.nodeId = id;
+                int index = findNodeIndex(id);
+                if (index >= 0) step.value = view.treeNodes[index].value;
+                events.add(step);
+                currentEvent = events.size() - 1;
+                nextEvent = events.size();
+                if (lcaPathProgress == expectedLcaPathLength) {
+                    finishLcaChallenge(id == lcaSecondNode);
+                }
+                else if (lcaPathProgress > expectedLcaPathLength) {
+                    finishLcaChallenge(false);
+                }
+                else if (alarmSteps >= alarmCapacity) {
+                    finishLcaChallenge(false);
+                }
+                else {
+                    message = "Correct step. Continue to the second room.";
+                }
             }
         }
         return;
@@ -1794,8 +1859,14 @@ void GameApp::drawControls() {
     DrawRectangle(24, 430, fillWidth, 14, Color{ 216, 117, 73, 255 });
     DrawText(TextFormat("%i / %i steps", alarmSteps, displayCapacity), 24, 451, 15,
         Color{ 205, 212, 224, 255 });
-    DrawText(TextFormat("Correct: %i / %i", expectedIndex, expectedRoute.size()),
-        24, 477, 15, Color{ 205, 212, 224, 255 });
+    if (lcaChallenge) {
+        DrawText(TextFormat("Path edges: %i / %i", lcaPathProgress, expectedLcaPathLength),
+            24, 477, 15, Color{ 205, 212, 224, 255 });
+    }
+    else {
+        DrawText(TextFormat("Correct: %i / %i", expectedIndex, expectedRoute.size()),
+            24, 477, 15, Color{ 205, 212, 224, 255 });
+    }
     DrawText(TextFormat("Wrong clicks: %i", wrongClicks), 24, 500, 15,
         Color{ 150, 165, 185, 255 });
     DrawText(TextFormat("Stars: %i   Score: %i", stars, score), 24, 525, 15,
@@ -1809,8 +1880,8 @@ void GameApp::drawControls() {
         selections += secondIndex >= 0 ? std::to_string(view.treeNodes[secondIndex].value) : "?";
         DrawText(selections.c_str(), 24, 552, 14, Color{ 205, 212, 224, 255 });
         if (expectedLcaNode >= 0) {
-            DrawText(TextFormat("Path: %i edges", expectedLcaPathLength), 24, 572, 14,
-                Color{ 240, 220, 170, 255 });
+            DrawText(TextFormat("Trace: %i / %i edges", lcaPathProgress, expectedLcaPathLength),
+                24, 572, 14, Color{ 240, 220, 170, 255 });
         }
     }
 }

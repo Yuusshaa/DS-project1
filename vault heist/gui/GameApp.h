@@ -60,6 +60,10 @@ private:
     int lcaSecondNode;
     int expectedLcaNode;
     int expectedLcaPathLength;
+    int lcaPhase;
+    int lcaPathCurrentNode;
+    int lcaPathProgress;
+    int lcaOptimalSteps;
     int heightOptimalSteps;         // Act 1.3: rooms + 1 diameter report
     int expectedDeleteCase;
     int rangeLow;

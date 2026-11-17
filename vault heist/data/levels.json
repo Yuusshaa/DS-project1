@@ -35,8 +35,6 @@
       "concept": "LCA and paths",
       "objective": "Find the lowest common ancestor and path length.",
       "scenarioId": 13,
-      "optimalSteps": 3,
-      "alarmCapacity": 6,
       "implemented": true
     },
     {

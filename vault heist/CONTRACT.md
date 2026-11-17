@@ -73,8 +73,9 @@ default value from `Event`.
 - The model returns the lowest common ancestor in `EV_DONE.nodeId` and the distance between
   the selected rooms, in edges, in `EV_DONE.value`. The GUI asks the model for this result;
   it does not walk parent links to compute it.
-- The GUI's level flow lets the player select two distinct rooms, then identify the returned
-  ancestor. Each selected room and the answer attempt costs one alarm step.
+- The GUI's level flow lets the player select two distinct rooms, identify the returned
+  ancestor, then trace adjacent rooms between the selected endpoints. The alarm counts the
+  three selections plus each path step; the model-provided edge distance is the target length.
 
 ## Act 1.5 addition (matches the shared model contract)
 
