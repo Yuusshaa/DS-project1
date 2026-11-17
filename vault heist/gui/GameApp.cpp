@@ -16,6 +16,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     searchTarget = 0;
     sandboxAction = ACTION_SEARCH;
     sandboxStructureType = 1;
+    sandboxOperationPage = 0;
     sandboxSeed = 1;
     sandboxRandomState = 1;
     insertTarget = 0;
@@ -2331,6 +2332,25 @@ void GameApp::processInput() {
         }
     }
 
+    if (screenState == 4) {
+        if (IsKeyPressed(KEY_SPACE)) {
+            animationPlaying = !animationPlaying;
+            return;
+        }
+        if (IsKeyPressed(KEY_LEFT)) {
+            stepPlayback(-1);
+            return;
+        }
+        if (IsKeyPressed(KEY_RIGHT)) {
+            stepPlayback(1);
+            return;
+        }
+        if (IsKeyPressed(KEY_R)) {
+            restartPlayback();
+            return;
+        }
+    }
+
     if (screenState == 2 && isLevel(1, 2)) {
         handleReconstructionInput();
         return;
@@ -2398,6 +2418,22 @@ void GameApp::processInput() {
     }
 
     if (screenState == 4) {
+        if (CheckCollisionPointRec(mouse, Rectangle{ 285, 82, 82, 38 })) {
+            restartPlayback();
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 375, 82, 70, 38 })) {
+            stepPlayback(-1);
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 453, 82, 82, 38 })) {
+            animationPlaying = !animationPlaying;
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 543, 82, 70, 38 })) {
+            stepPlayback(1);
+            return;
+        }
         if (CheckCollisionPointRec(mouse, Rectangle{ 24, 725, 180, 44 })) {
             screenState = 0;
             return;
@@ -2428,6 +2464,26 @@ void GameApp::processInput() {
             randomizeSandbox();
             return;
         }
+        if (sandboxOperationCount(0) > 0 &&
+            CheckCollisionPointRec(mouse, Rectangle{ 24, 442, 100, 30 })) {
+            sandboxOperationPage = 0;
+            return;
+        }
+        if (sandboxOperationCount(1) > 0 &&
+            CheckCollisionPointRec(mouse, Rectangle{ 134, 442, 100, 30 })) {
+            sandboxOperationPage = 1;
+            return;
+        }
+        if (sandboxOperationCount(2) > 0 &&
+            CheckCollisionPointRec(mouse, Rectangle{ 24, 476, 100, 30 })) {
+            sandboxOperationPage = 2;
+            return;
+        }
+        if (sandboxOperationCount(3) > 0 &&
+            CheckCollisionPointRec(mouse, Rectangle{ 134, 476, 100, 30 })) {
+            sandboxOperationPage = 3;
+            return;
+        }
         if (CheckCollisionPointRec(mouse, Rectangle{ 24, 330, 210, 36 })) {
             sandboxSeedFieldFocused = false;
             sandboxSecondFieldFocused = false;
@@ -2438,31 +2494,14 @@ void GameApp::processInput() {
             sandboxSecondFieldFocused = true;
             return;
         }
-        for (int operation = 0; operation < 5; operation++) {
-            Rectangle bounds{ 24, (float)(450 + operation * 48), 210, 40 };
-            if (!CheckCollisionPointRec(mouse, bounds)) continue;
-            if (operation == 4) {
-                selectSandboxStructure(sandboxStructureType);
+        for (int operation = 0; operation < sandboxOperationCount(sandboxOperationPage); operation++) {
+            Rectangle bounds{ 24, (float)(512 + operation * 25), 210, 23 };
+            if (CheckCollisionPointRec(mouse, bounds)) {
+                int action = sandboxOperationAt(sandboxOperationPage, operation);
+                if (action == 0) selectSandboxStructure(sandboxStructureType);
+                else executeSandboxAction(action);
                 return;
             }
-            if (sandboxStructureType == 0) {
-                int actions[4] = { ACTION_TRAVERSE_PREORDER, ACTION_TRAVERSE_INORDER,
-                    ACTION_TRAVERSE_POSTORDER, ACTION_TRAVERSE_LEVEL_ORDER };
-                runAction(actions[operation], 0, 0);
-            }
-            else if (sandboxStructureType == 3) {
-                int actions[4] = { ACTION_HEAP_BUILD, ACTION_HEAPIFY,
-                    ACTION_EXTRACT_MAX, ACTION_HEAP_SORT };
-                runAction(actions[operation], 0, 0);
-            }
-            else if (operation == 0) executeSandboxAction(ACTION_SEARCH);
-            else if (operation == 1) executeSandboxAction(ACTION_INSERT);
-            else if (operation == 2) executeSandboxAction(ACTION_DELETE);
-            else executeSandboxAction(ACTION_RANGE_QUERY);
-            return;
-        }
-        if (sandboxStructureType == 0 || sandboxStructureType == 3) {
-            return;
         }
         for (int i = 0; i < positions.size(); i++) {
             Vector2 center = Vector2{ positions[i].x, positions[i].y };
@@ -3074,30 +3113,59 @@ void GameApp::drawSandbox() {
     DrawText(seedLabel.c_str(), 36, 224, 17, Color{ 230, 235, 242, 255 });
     drawButton(Rectangle{ 24, 257, 210, 40 }, "Random setup", true);
 
-    bool needsKeyInput = sandboxStructureType == 1 || sandboxStructureType == 2;
-    if (needsKeyInput) {
-        DrawText("VALUE", 24, 306, 14, Color{ 150, 175, 205, 255 });
-        DrawRectangle(24, 330, 210, 36, Color{ 25, 34, 48, 255 });
-        DrawRectangleLinesEx(Rectangle{ 24, 330, 210, 36 }, 2.0f,
-            !sandboxSeedFieldFocused && !sandboxSecondFieldFocused
-                ? Color{ 240, 220, 170, 255 } : Color{ 62, 76, 96, 255 });
-        DrawText(sandboxValueInput.c_str(), 36, 339, 17, Color{ 230, 235, 242, 255 });
+    std::string firstInputLabel = "KEY / VALUE";
+    if (sandboxAction == ACTION_HEIGHT || sandboxAction == ACTION_ROTATE_LEFT ||
+        sandboxAction == ACTION_ROTATE_RIGHT) firstInputLabel = "NODE ID";
+    else if (sandboxAction == ACTION_LCA) firstInputLabel = "FIRST NODE ID";
+    else if (sandboxAction == ACTION_KTH) firstInputLabel = "K (1-BASED)";
+    else if (sandboxAction == ACTION_HEAPIFY) firstInputLabel = "START ARRAY INDEX";
+    else if (sandboxAction == ACTION_HEAP_SWAP) firstInputLabel = "PARENT ARRAY INDEX";
+    DrawText(firstInputLabel.c_str(), 24, 306, 14, Color{ 150, 175, 205, 255 });
+    DrawRectangle(24, 330, 210, 36, Color{ 25, 34, 48, 255 });
+    DrawRectangleLinesEx(Rectangle{ 24, 330, 210, 36 }, 2.0f,
+        !sandboxSeedFieldFocused && !sandboxSecondFieldFocused
+            ? Color{ 240, 220, 170, 255 } : Color{ 62, 76, 96, 255 });
+    DrawText(sandboxValueInput.c_str(), 36, 339, 17, Color{ 230, 235, 242, 255 });
 
-        DrawText("RANGE HIGH", 24, 374, 14, Color{ 150, 175, 205, 255 });
-        DrawRectangle(24, 398, 210, 36, Color{ 25, 34, 48, 255 });
-        DrawRectangleLinesEx(Rectangle{ 24, 398, 210, 36 }, 2.0f,
-            sandboxSecondFieldFocused ? Color{ 240, 220, 170, 255 } :
-            Color{ 62, 76, 96, 255 });
-        DrawText(sandboxSecondInput.c_str(), 36, 407, 17, Color{ 230, 235, 242, 255 });
+    std::string secondInputLabel = "SECOND VALUE";
+    if (sandboxAction == ACTION_RANGE_QUERY) secondInputLabel = "RANGE HIGH";
+    else if (sandboxAction == ACTION_LCA) secondInputLabel = "SECOND NODE ID";
+    else if (sandboxAction == ACTION_HEAP_SWAP) secondInputLabel = "CHILD ARRAY INDEX";
+    DrawText(secondInputLabel.c_str(), 24, 374, 14, Color{ 150, 175, 205, 255 });
+    DrawRectangle(24, 398, 210, 36, Color{ 25, 34, 48, 255 });
+    DrawRectangleLinesEx(Rectangle{ 24, 398, 210, 36 }, 2.0f,
+        sandboxSecondFieldFocused ? Color{ 240, 220, 170, 255 } :
+        Color{ 62, 76, 96, 255 });
+    DrawText(sandboxSecondInput.c_str(), 36, 407, 17, Color{ 230, 235, 242, 255 });
+
+    const char* pageLabels[4] = { "Read", "Edit", "AVL", "Heap" };
+    for (int page = 0; page < 4; page++) {
+        float x = page % 2 == 0 ? 24.0f : 134.0f;
+        float y = page < 2 ? 442.0f : 476.0f;
+        bool available = sandboxOperationCount(page) > 0;
+        Rectangle bounds{ x, y, 100, 30 };
+        Color tabFill = available ? Color{ 42, 57, 78, 255 } : Color{ 31, 39, 52, 255 };
+        Color tabText = available ? Color{ 230, 235, 242, 255 } : Color{ 125, 133, 144, 255 };
+        DrawRectangleRounded(bounds, 0.1f, 4, tabFill);
+        DrawRectangleLinesEx(bounds, 1.5f, Color{ 91, 113, 143, 255 });
+        DrawText(pageLabels[page], (int)bounds.x + 12, (int)bounds.y + 7, 15, tabText);
+        if (sandboxOperationPage == page && available) {
+            DrawRectangleLinesEx(bounds, 3.0f, Color{ 240, 220, 170, 255 });
+        }
     }
-
-    const char* treeLabels[5] = { "Search", "Insert", "Delete", "Range query", "Reset setup" };
-    const char* binaryLabels[5] = { "Preorder", "Inorder", "Postorder", "Level order", "Reset setup" };
-    const char* heapLabels[5] = { "Build max heap", "Heapify root", "Extract max", "Heap sort", "Reset setup" };
-    const char** labels = sandboxStructureType == 0 ? binaryLabels :
-        sandboxStructureType == 3 ? heapLabels : treeLabels;
-    for (int i = 0; i < 5; i++) {
-        drawButton(Rectangle{ 24, (float)(450 + i * 48), 210, 40 }, labels[i], true);
+    int operations = sandboxOperationCount(sandboxOperationPage);
+    for (int i = 0; i < operations; i++) {
+        std::string label = sandboxOperationLabel(
+            sandboxOperationAt(sandboxOperationPage, i));
+        Rectangle bounds{ 24, (float)(512 + i * 25), 210, 23 };
+        DrawRectangleRounded(bounds, 0.1f, 4, Color{ 42, 57, 78, 255 });
+        DrawRectangleLinesEx(bounds, 1.5f, Color{ 91, 113, 143, 255 });
+        DrawText(label.c_str(), 32, (int)bounds.y + 4, 13,
+            Color{ 230, 235, 242, 255 });
+    }
+    if (operations == 0) {
+        DrawText("No operations for this structure.", 24, 520, 13,
+            Color{ 150, 165, 185, 255 });
     }
     drawButton(Rectangle{ 24, 725, 180, 44 }, "Main menu", true);
     if (view.viewType == MODEL_VIEW_HEAP) drawHeapView();
@@ -3110,6 +3178,9 @@ void GameApp::drawSandbox() {
 void GameApp::selectSandboxStructure(int structureType) {
     if (structureType < 0 || structureType > 3) return;
     sandboxStructureType = structureType;
+    sandboxOperationPage = structureType == 3 ? 3 : 0;
+    sandboxAction = structureType == 0 ? ACTION_TRAVERSE_PREORDER :
+        structureType == 3 ? ACTION_HEAP_BUILD : ACTION_SEARCH;
     int scenarioId = structureType == 0 ? 12 :
         structureType == 1 ? 2 : structureType == 2 ? 3 : 4;
     EventLog setup;
@@ -3259,19 +3330,33 @@ void GameApp::randomizeSandbox() {
 }
 
 void GameApp::executeSandboxAction(int action) {
+    sandboxAction = action;
+    bool takesValue = action == ACTION_SEARCH || action == ACTION_INSERT ||
+        action == ACTION_DELETE || action == ACTION_RANGE_QUERY ||
+        action == ACTION_HEIGHT || action == ACTION_LCA ||
+        action == ACTION_ROTATE_LEFT || action == ACTION_ROTATE_RIGHT ||
+        action == ACTION_KTH || action == ACTION_RANK ||
+        action == ACTION_HEAPIFY || action == ACTION_HEAP_SWAP;
+    bool takesSecondValue = action == ACTION_RANGE_QUERY ||
+        action == ACTION_LCA || action == ACTION_HEAP_SWAP;
+    if (!takesValue) {
+        runAction(action, 0, 0);
+        return;
+    }
+
     int value = 0;
     int secondValue = 0;
     try {
         if (sandboxValueInput.empty()) throw 0;
         value = std::stoi(sandboxValueInput);
-        if (action == ACTION_RANGE_QUERY) {
+        if (takesSecondValue) {
             if (sandboxSecondInput.empty()) throw 0;
             secondValue = std::stoi(sandboxSecondInput);
         }
     }
     catch (...) {
-        message = action == ACTION_RANGE_QUERY
-            ? "Enter a low value and a high value first."
+        message = takesSecondValue
+            ? "Enter both operation values first."
             : "Enter an integer value first.";
         return;
     }
@@ -3279,8 +3364,73 @@ void GameApp::executeSandboxAction(int action) {
         message = "Range low value must be less than or equal to high value.";
         return;
     }
-    sandboxAction = action;
     runAction(action, value, secondValue);
+}
+
+int GameApp::sandboxOperationCount(int page) {
+    if (page == 0) return sandboxStructureType == 3 ? 0 : 8;
+    if (page == 1) {
+        if (sandboxStructureType == 0) return 2;
+        if (sandboxStructureType == 1 || sandboxStructureType == 2) return 5;
+    }
+    if (page == 2 && sandboxStructureType == 2) return 6;
+    if (page == 3 && sandboxStructureType == 3) return 7;
+    return 0;
+}
+
+int GameApp::sandboxOperationAt(int page, int index) {
+    int queryActions[7] = {
+        ACTION_TRAVERSE_PREORDER, ACTION_TRAVERSE_INORDER,
+        ACTION_TRAVERSE_POSTORDER, ACTION_TRAVERSE_LEVEL_ORDER,
+        ACTION_HEIGHT, ACTION_DIAMETER, ACTION_LCA
+    };
+    int treeEditActions[4] = {
+        ACTION_SEARCH, ACTION_INSERT, ACTION_DELETE, ACTION_RANGE_QUERY
+    };
+    int avlActions[5] = {
+        ACTION_ROTATION_CASE, ACTION_ROTATE_LEFT, ACTION_ROTATE_RIGHT,
+        ACTION_KTH, ACTION_RANK
+    };
+    int heapActions[6] = {
+        ACTION_HEAP_BUILD, ACTION_HEAPIFY, ACTION_EXTRACT_MAX,
+        ACTION_HEAP_SORT, ACTION_IS_MAX_HEAP, ACTION_HEAP_SWAP
+    };
+    int operationCount = sandboxOperationCount(page);
+    if (index < 0 || index >= operationCount) return 0;
+    if (index == operationCount - 1) return 0;
+    if (page == 0) return queryActions[index];
+    if (page == 1 && sandboxStructureType == 0) return ACTION_MIRROR;
+    if (page == 1) return treeEditActions[index];
+    if (page == 2) return avlActions[index];
+    return heapActions[index];
+}
+
+std::string GameApp::sandboxOperationLabel(int action) {
+    if (action == 0) return "Reset selected structure";
+    if (action == ACTION_TRAVERSE_PREORDER) return "Preorder traversal";
+    if (action == ACTION_TRAVERSE_INORDER) return "Inorder traversal";
+    if (action == ACTION_TRAVERSE_POSTORDER) return "Postorder traversal";
+    if (action == ACTION_TRAVERSE_LEVEL_ORDER) return "Level-order traversal";
+    if (action == ACTION_HEIGHT) return "Room height";
+    if (action == ACTION_DIAMETER) return "Tree diameter";
+    if (action == ACTION_LCA) return "Lowest common ancestor";
+    if (action == ACTION_SEARCH) return "Search key";
+    if (action == ACTION_INSERT) return "Insert key";
+    if (action == ACTION_DELETE) return "Delete key";
+    if (action == ACTION_RANGE_QUERY) return "Range query";
+    if (action == ACTION_MIRROR) return "Mirror tree";
+    if (action == ACTION_ROTATION_CASE) return "Detect rotation case";
+    if (action == ACTION_ROTATE_LEFT) return "Rotate left at pivot";
+    if (action == ACTION_ROTATE_RIGHT) return "Rotate right at pivot";
+    if (action == ACTION_KTH) return "Find kth smallest";
+    if (action == ACTION_RANK) return "Rank of key";
+    if (action == ACTION_HEAP_BUILD) return "Build max heap";
+    if (action == ACTION_HEAPIFY) return "Heapify from index";
+    if (action == ACTION_EXTRACT_MAX) return "Extract maximum";
+    if (action == ACTION_HEAP_SORT) return "Heap sort";
+    if (action == ACTION_IS_MAX_HEAP) return "Check max-heap property";
+    if (action == ACTION_HEAP_SWAP) return "Swap parent and child";
+    return "Operation";
 }
 
 void GameApp::drawCampaignMap() {
@@ -3658,7 +3808,7 @@ void GameApp::drawTree() {
             DrawRectangleLines((int)positions[p].x + 35,
                 (int)positions[p].y - 28, 176, 80,
                 Color{ 91, 113, 143, 255 });
-            DrawText(TextFormat("Key: %i", node.value),
+            DrawText(TextFormat("ID: %i  Key: %i", node.id, node.value),
                 (int)positions[p].x + 44, (int)positions[p].y - 15,
                 14, Color{ 230, 235, 242, 255 });
             bool hideHeight = heightChallenge && challengeActive &&

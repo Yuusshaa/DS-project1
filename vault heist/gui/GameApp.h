@@ -58,6 +58,7 @@ private:
     int searchTarget;
     int sandboxAction;
     int sandboxStructureType; // 0=Binary Tree, 1=BST, 2=AVL, 3=Max Heap
+    int sandboxOperationPage; // 0=tree queries, 1=tree edits, 2=AVL, 3=heap
     int sandboxSeed;
     int sandboxRandomState;
     int insertTarget;
@@ -221,6 +222,9 @@ private:
     void randomizeSandbox();
     int nextSandboxRandom();
     bool sandboxContainsKey(int key);
+    int sandboxOperationCount(int page);
+    int sandboxOperationAt(int page, int index);
+    std::string sandboxOperationLabel(int action);
     void drawHeapView();
     void drawHeapControls();
     void drawHeapifyControls();

@@ -54,12 +54,13 @@ msbuild VaultHeist.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64 /p:Pr
   displayed seed can be reused to regenerate it. Binary Tree selects a seeded
   sample; BST and AVL generate seeded keys; Max Heap uses seeded legal swaps
   to build a valid heap from its sample values.
-- For BST/AVL, type a key in **Value** and use Search, Insert, Delete, or Range
-  Query; enter the range high value in the second field. Press Enter to repeat
-  the last operation.
-- Binary Tree exposes its four traversals. Max Heap exposes build, root
-  heapify, extract-max, and heap sort. **Reset setup** restores the selected
-  structure's starting state.
+- Use the **Read**, **Edit**, **AVL**, and **Heap** operation pages. The
+  available operations depend on the selected structure; tree tooltips show
+  node IDs for height and LCA queries.
+- Enter operation parameters in the two value fields; for range queries enter
+  the high value second, and for LCA enter the second node ID. Press Enter to
+  repeat the selected operation. **Reset selected structure** restores its
+  starting state.
 - Use **Escape** to return to the previous menu.
 - Close the window to exit.
 

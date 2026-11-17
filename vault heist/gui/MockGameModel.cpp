@@ -949,6 +949,20 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
         collectRange(findRootId(), value, secondValue, events);
         message = "Mock BST range query complete";
     }
+    else if (action == ACTION_HEIGHT) {
+        int index = findNodeIndex(value);
+        if (index < 0) {
+            message = "Height query node ID was not found";
+            return false;
+        }
+        Event done;
+        done.type = EV_DONE;
+        done.nodeId = value;
+        done.value = view.treeNodes[index].height;
+        events.add(done);
+        message = "Mock node height computed (leaf = 1)";
+        return true;
+    }
     else if (action == ACTION_DIAMETER) {
         // Contract: the answer travels in EV_DONE.value (longest path in edges).
         int best = 0;
