@@ -138,6 +138,15 @@ default value from `Event`.
 - Mock implementation is the stand-in. Yusha's model must support scenario 7 and actions 9/11
   with the same heap-event meanings before integration.
 
+## Act 4.5 final vault
+
+- Scenario 8 is a fresh ten-value array with duplicate and negative keys:
+  `{12, -4, 7, 12, 0, 5, 3, 9, -1, 6}`.
+- The GUI reuses the build-then-extract workflow without the timer, and allows the player to
+  complete the full heap sort independently under the alarm limit.
+- Yusha's real model must load scenario 8 and preserve duplicates and negative values through
+  `ACTION_HEAP_BUILD` and repeated `ACTION_EXTRACT_MAX` calls.
+
 ## Public model interface to finalize
 
 Before the GUI calls model operations, Yusha records exact class names,

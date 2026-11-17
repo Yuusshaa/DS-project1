@@ -87,6 +87,7 @@ private:
     int heapExtractOptimalSteps;
     int heapRacePhase;
     int heapRaceExtractionCount;
+    int heapRaceTotalExtractions;
     int heapRaceOptimalSteps;
     int heightOptimalSteps;         // Act 1.3: rooms + 1 diameter report
     int expectedDeleteCase;
@@ -184,6 +185,7 @@ private:
     void drawHeapifyControls();
     void drawHeapExtractControls();
     void drawHeapRaceControls();
+    void drawHeapFinalControls();
     void executeSandboxAction(int action);
     void restartPlayback();
     void stepPlayback(int direction);

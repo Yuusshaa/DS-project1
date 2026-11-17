@@ -211,8 +211,11 @@
       "number": 5,
       "title": "Final Vault",
       "concept": "complete Heap Sort",
-      "objective": "Sort a new array in ascending order.",
-      "implemented": false
+      "objective": "Independently heap-sort a new array with duplicates and negative values.",
+      "scenarioId": 8,
+      "optimalSteps": 10,
+      "alarmCapacity": 17,
+      "implemented": true
     }
   ]
 }

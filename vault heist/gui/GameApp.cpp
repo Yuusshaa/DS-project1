@@ -50,6 +50,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     heapExtractOptimalSteps = 7;
     heapRacePhase = 0;
     heapRaceExtractionCount = 0;
+    heapRaceTotalExtractions = 7;
     heapRaceOptimalSteps = 8;
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
@@ -136,6 +137,7 @@ void GameApp::runAction(int action, int value, int secondValue) {
         heapifyOperationCount = 0;
         heapExtractCount = 0;
         heapRaceExtractionCount = 0;
+        heapRaceTotalExtractions = 0;
         heapRacePhase = 0;
         heapRaceSecondsRemaining = 0.0f;
     }
@@ -1206,7 +1208,9 @@ void GameApp::finishHeapExtractChallenge(bool success) {
 }
 
 void GameApp::startHeapRaceChallenge() {
-    if (!isLevel(4, 4)) return;
+    bool timedRace = isLevel(4, 4);
+    bool finalVault = isLevel(4, 5);
+    if (!timedRace && !finalVault) return;
     LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
     EventLog setup;
     if (!model.loadScenario(level.scenarioId, setup)) {
@@ -1219,8 +1223,10 @@ void GameApp::startHeapRaceChallenge() {
     nextEvent = 0;
     heapRacePhase = 0;
     heapRaceExtractionCount = 0;
-    heapRaceOptimalSteps = level.optimalSteps > 0 ? level.optimalSteps : 8;
-    heapRaceTimeLimit = 60.0f;
+    heapRaceTotalExtractions = view.heapSize > 0 ? view.heapSize - 1 : 0;
+    heapRaceOptimalSteps = level.optimalSteps > 0 ? level.optimalSteps :
+        heapRaceTotalExtractions + 1;
+    heapRaceTimeLimit = timedRace ? 60.0f : 0.0f;
     heapRaceSecondsRemaining = heapRaceTimeLimit;
     heapRaceChallenge = true;
     heapRaceWaiting = false;
@@ -1235,7 +1241,9 @@ void GameApp::startHeapRaceChallenge() {
     challengeActive = true;
     challengeFinished = false;
     animationPlaying = false;
-    message = "Build the heap, then extract every maximum before the timer expires.";
+    message = timedRace
+        ? "Build the heap, then extract every maximum before the timer expires."
+        : "Final vault: build the heap, then sort this new array without a timer.";
 }
 
 void GameApp::finishHeapRaceChallenge(bool success) {
@@ -1254,14 +1262,18 @@ void GameApp::finishHeapRaceChallenge(bool success) {
         return;
     }
     heapCompletionReady = false;
-    if (success && alarmSteps < alarmCapacity && heapRaceSecondsRemaining > 0.0f) {
+    bool withinTime = !isLevel(4, 4) || heapRaceSecondsRemaining > 0.0f;
+    if (success && alarmSteps < alarmCapacity && withinTime) {
         if (wrongClicks == 0 && alarmSteps <= heapRaceOptimalSteps) stars = 3;
         else if (wrongClicks <= 1 && alarmSteps * 4 <= heapRaceOptimalSteps * 5) stars = 2;
         else stars = 1;
-        score = 1000 - 10 * alarmSteps - 50 * wrongClicks -
-            (int)(heapRaceTimeLimit - heapRaceSecondsRemaining);
+        int timePenalty = isLevel(4, 4)
+            ? (int)(heapRaceTimeLimit - heapRaceSecondsRemaining) : 0;
+        score = 1000 - 10 * alarmSteps - 50 * wrongClicks - timePenalty;
         if (score < 0) score = 0;
-        message = "Race won. The treasures are sorted in ascending order.";
+        message = isLevel(4, 4)
+            ? "Race won. The treasures are sorted in ascending order."
+            : "Final vault opened. The new array is sorted in ascending order.";
     }
     else {
         stars = 0;
@@ -1997,7 +2009,7 @@ void GameApp::processInput() {
     bool isRotationLevel = isLevel(3, 2) || isLevel(3, 3);
     bool isHeapBuildLevel = isLevel(4, 1);
     bool isHeapifyLevel = isLevel(4, 2);
-    bool isHeapRaceLevel = isLevel(4, 4);
+    bool isHeapRaceLevel = isLevel(4, 4) || isLevel(4, 5);
     if (isHeapRaceLevel) {
         if (heapCompletionPending || heapRaceWaiting) return;
         if (CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
@@ -2355,7 +2367,7 @@ void GameApp::update(float deltaTime) {
         }
     }
 
-    if (heapRaceChallenge && !heapCompletionPending) {
+    if (heapRaceChallenge && isLevel(4, 4) && !heapCompletionPending) {
         heapRaceSecondsRemaining -= deltaTime;
         if (heapRaceSecondsRemaining <= 0.0f) {
             heapRaceSecondsRemaining = 0.0f;
@@ -2426,6 +2438,7 @@ void GameApp::draw() {
         if (isLevel(4, 2)) drawHeapifyControls();
         else if (isLevel(4, 3)) drawHeapExtractControls();
         else if (isLevel(4, 4)) drawHeapRaceControls();
+        else if (isLevel(4, 5)) drawHeapFinalControls();
         else drawHeapControls();
         drawHeapView();
     }
@@ -3059,10 +3072,34 @@ void GameApp::drawHeapRaceControls() {
     drawButton(Rectangle{ 20, 182, 220, 42 }, "Reset level", true);
     DrawText("Build once, then extract", 20, 242, 13, Color{ 205, 212, 224, 255 });
     DrawText("until the array is sorted.", 20, 262, 13, Color{ 205, 212, 224, 255 });
-    DrawText(TextFormat("Extracted: %i / 7", heapRaceExtractionCount),
+    DrawText(TextFormat("Extracted: %i / %i", heapRaceExtractionCount,
+        heapRaceTotalExtractions),
         20, 292, 14, Color{ 205, 212, 224, 255 });
     DrawText(TextFormat("Time: %i sec", (int)heapRaceSecondsRemaining),
         20, 322, 14, Color{ 240, 220, 170, 255 });
+    DrawText("ALARM", 24, 405, 15, Color{ 150, 175, 205, 255 });
+    int capacity = alarmCapacity > 0 ? alarmCapacity : 10;
+    int alarm = alarmSteps > capacity ? capacity : alarmSteps;
+    DrawRectangle(24, 430, 210, 14, Color{ 58, 66, 78, 255 });
+    DrawRectangle(24, 430, 210 * alarm / capacity, 14,
+        Color{ 216, 117, 73, 255 });
+    DrawText(TextFormat("%i / %i operations", alarmSteps, capacity), 24, 451, 14,
+        Color{ 205, 212, 224, 255 });
+}
+
+void GameApp::drawHeapFinalControls() {
+    DrawText("ACT 4.5 - FINAL VAULT", 24, 55, 15, Color{ 150, 175, 205, 255 });
+    drawButton(Rectangle{ 20, 82, 220, 42 }, "Start final vault", true);
+    std::string actionLabel = heapRacePhase == 0 ? "Build max heap" : "Extract maximum";
+    drawButton(Rectangle{ 20, 132, 220, 42 }, actionLabel,
+        heapRaceChallenge && !heapRaceWaiting);
+    drawButton(Rectangle{ 20, 182, 220, 42 }, "Reset level", true);
+    DrawText("New array: includes duplicates", 20, 242, 12,
+        Color{ 205, 212, 224, 255 });
+    DrawText("and negative values. Sort it.", 20, 261, 12,
+        Color{ 205, 212, 224, 255 });
+    DrawText(TextFormat("Extracted: %i / %i", heapRaceExtractionCount,
+        heapRaceTotalExtractions), 20, 292, 14, Color{ 205, 212, 224, 255 });
     DrawText("ALARM", 24, 405, 15, Color{ 150, 175, 205, 255 });
     int capacity = alarmCapacity > 0 ? alarmCapacity : 10;
     int alarm = alarmSteps > capacity ? capacity : alarmSteps;

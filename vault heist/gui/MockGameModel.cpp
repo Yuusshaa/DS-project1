@@ -195,6 +195,16 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         return true;
     }
 
+    if (scenarioId == 8) {
+        int values[10] = { 12, -4, 7, 12, 0, 5, 3, 9, -1, 6 };
+        view.viewType = MODEL_VIEW_HEAP;
+        view.heapSize = 10;
+        for (int i = 0; i < 10; i++) view.heapValues.push(values[i]);
+        message = "Final vault array loaded; sort duplicates and negative values";
+        events.clear();
+        return true;
+    }
+
     if (scenarioId == 31) {
         ViewNode node;
         node.id = 1; node.value = 50; node.leftId = 2; node.rightId = 3;
