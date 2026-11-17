@@ -320,7 +320,7 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         return true;
     }
 
-    if (scenarioId == 40) {
+    if (scenarioId == 3 || scenarioId == 40) {
         int fixture[7][5] = {
             { 1, 50, 2, 3, -1 }, { 2, 30, 4, 5, 1 },
             { 3, 70, 6, 7, 1 }, { 4, 20, -1, -1, 2 },
@@ -635,7 +635,8 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
         int resultId = -1;
         int resultRank = 0;
         if (action == ACTION_KTH) {
-            if (value < 1 || value > view.treeNodes[findRootId() >= 0 ? findNodeIndex(findRootId()) : 0].size) {
+            int rootIndex = findNodeIndex(findRootId());
+            if (rootIndex < 0 || value < 1 || value > view.treeNodes[rootIndex].size) {
                 message = "k is outside the tree's order-statistic range";
                 return false;
             }
@@ -675,7 +676,7 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
                 if (value == view.treeNodes[index].value) {
                     compare.code = CMP_EQUAL;
                     int leftIndex = findNodeIndex(view.treeNodes[index].leftId);
-                    resultRank += leftIndex >= 0 ? view.treeNodes[leftIndex].size : 0;
+                    resultRank += (leftIndex >= 0 ? view.treeNodes[leftIndex].size : 0) + 1;
                     events.add(compare);
                     resultId = current;
                     break;
@@ -693,17 +694,14 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
                 events.add(compare);
             }
         }
-        if (action == ACTION_RANK && resultId < 0) {
-            message = "Key not found for rank query";
-            return false;
-        }
         Event done;
         done.type = EV_DONE;
-        done.nodeId = resultId;
-        done.value = action == ACTION_KTH ? value : resultRank;
+        done.nodeId = action == ACTION_KTH ? resultId : -1;
+        done.value = action == ACTION_KTH && resultId >= 0
+            ? view.treeNodes[findNodeIndex(resultId)].value : resultRank;
         events.add(done);
         message = action == ACTION_KTH
-            ? "Mock kth-smallest query complete" : "Mock zero-based rank query complete";
+            ? "Mock kth-smallest query complete" : "Mock rank (keys less than or equal) query complete";
         return true;
     }
 

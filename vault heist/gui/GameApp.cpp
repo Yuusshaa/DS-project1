@@ -1795,12 +1795,13 @@ void GameApp::handleNodeClick(int id) {
                 if (rankEvents.get(i).type == EV_DONE) orderStatisticRank = rankEvents.get(i).value;
                 events.add(rankEvents.get(i));
             }
-            alarmSteps += 1 + rankEvents.countAlarmSteps();
+            alarmSteps++;
             challengeFinished = true;
             challengeActive = false;
-            stars = alarmSteps <= 7 ? 3 : alarmSteps <= 9 ? 2 : 1;
+            stars = alarmSteps <= 4 ? 3 : alarmSteps <= 7 ? 2 : 1;
             score = stars * 100 + (wrongClicks == 0 ? 150 : 0);
-            message = "Correct! Rank of " + std::to_string(key) + " is " + std::to_string(orderStatisticRank) + " (zero-based).";
+            message = "Correct! " + std::to_string(orderStatisticRank) +
+                " keys are less than or equal to " + std::to_string(key) + ".";
             levelManager.recordResult(currentLevelIndex, stars, score);
             levelManager.saveProgress("campaign_progress.dat");
             screenState = 3;
