@@ -33,6 +33,8 @@ private:
     DynArray<int> balanceFound;
     DynArray<int> enteredHeights;   // Act 1.3: answer given per postorder room, -1 = not yet
     DynArray<GuiNodePosition> positions;
+    DynArray<GuiNodePosition> mirrorStartPositions;
+    DynArray<GuiNodePosition> mirrorEndPositions;
     std::string message;
     std::string sandboxValueInput;
     std::string sandboxSecondInput;
@@ -83,9 +85,11 @@ private:
     bool balanceChallenge;
     bool heightChallenge;
     bool lcaChallenge;
+    bool mirrorAnimationActive;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
+    float mirrorAnimationTime;
 
     void processInput();
     void update(float deltaTime);
@@ -110,6 +114,7 @@ private:
     void startLcaChallenge();
     void finishLcaChallenge(bool correct);
     void startMirrorChallenge();
+    void finishMirrorChallenge();
     int enteredHeightFor(int id);
     bool isLevel(int act, int number);
     void drawHeightPanel();
@@ -122,6 +127,7 @@ private:
     void assignPositions(int nodeId, int depth, int& cursor);
     int findNodeIndex(int id);
     int findPositionIndex(int id);
+    int findPositionIndexIn(DynArray<GuiNodePosition>& source, int id);
     bool isInSkippedSubtree(int id);
     void drawTree();
     void drawControls();

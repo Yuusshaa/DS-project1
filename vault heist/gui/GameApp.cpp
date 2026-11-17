@@ -28,6 +28,8 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     lcaPathCurrentNode = -1;
     lcaPathProgress = 0;
     lcaOptimalSteps = 0;
+    mirrorAnimationActive = false;
+    mirrorAnimationTime = 0.0f;
     heightOptimalSteps = 0;
     expectedDeleteCase = 0;
     rangeLow = 0;
@@ -85,6 +87,8 @@ void GameApp::runAction(int action, int value, int secondValue) {
     balanceChallenge = false;
     heightChallenge = false;
     lcaChallenge = false;
+    mirrorAnimationActive = false;
+    mirrorAnimationTime = 0.0f;
     heightPhase = 0;
     pendingNodeId = -1;
     answerInput.clear();
@@ -724,20 +728,53 @@ void GameApp::startMirrorChallenge() {
     challengeActive = false;
     challengeFinished = false;
     events.clear();
+    copyViewData(view, challengeStartView);
+    mirrorStartPositions.clear();
+    mirrorEndPositions.clear();
+    for (int i = 0; i < positions.size(); i++) {
+        mirrorStartPositions.push(positions[i]);
+    }
     if (!model.performAction(ACTION_MIRROR, 0, 0, events)) {
         message = model.statusText();
         return;
     }
     refreshView();
+    copyViewData(view, challengeFinalView);
+    for (int i = 0; i < positions.size(); i++) {
+        mirrorEndPositions.push(positions[i]);
+    }
+    for (int i = 0; i < positions.size(); i++) {
+        int oldIndex = findPositionIndexIn(mirrorStartPositions, positions[i].id);
+        if (oldIndex >= 0) {
+            positions[i].x = mirrorStartPositions[oldIndex].x;
+            positions[i].y = mirrorStartPositions[oldIndex].y;
+            positions[i].depth = mirrorStartPositions[oldIndex].depth;
+        }
+    }
     alarmSteps = events.countAlarmSteps();
     wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    mirrorAnimationTime = 0.0f;
+    mirrorAnimationActive = true;
+    animationPlaying = false;
+    currentEvent = -1;
+    nextEvent = 0;
+    eventTimer = 0.0f;
+    highlightedNodeId = -1;
+    message = "Mirroring the vault...";
+}
+
+void GameApp::finishMirrorChallenge() {
+    mirrorAnimationActive = false;
+    alarmSteps = events.countAlarmSteps();
     stars = 3;
     score = 1000 - alarmSteps * 10;
     if (score < 0) score = 0;
     levelManager.recordResult(currentLevelIndex, stars, score);
     levelManager.saveProgress("campaign_progress.dat");
-    message = "Vault mirrored. Compare the new left and right branches.";
     challengeFinished = true;
+    message = "Vault mirrored. Compare the new left and right branches.";
     screenState = 3;
 }
 
@@ -1218,6 +1255,7 @@ void GameApp::copyViewData(ModelView& source, ModelView& destination) {
 
 void GameApp::processInput() {
     if (IsKeyPressed(KEY_ESCAPE)) {
+        if (mirrorAnimationActive) runAction(0, 0, 0);
         if (screenState == 2 || screenState == 3) {
             if (currentLevelIndex >= 0 && currentLevelIndex < levelManager.count()) {
                 activeAct = levelManager.getLevel(currentLevelIndex).act;
@@ -1232,6 +1270,8 @@ void GameApp::processInput() {
         }
         return;
     }
+
+    if (screenState == 2 && mirrorAnimationActive) return;
 
     if (screenState == 4) {
         int codepoint = GetCharPressed();
@@ -1535,6 +1575,30 @@ void GameApp::update(float deltaTime) {
                 hoveredNodeId = positions[i].id;
                 break;
             }
+        }
+    }
+
+    if (mirrorAnimationActive) {
+        mirrorAnimationTime += deltaTime;
+        float progress = mirrorAnimationTime / 0.9f;
+        if (progress > 1.0f) progress = 1.0f;
+        float eased = progress * progress * (3.0f - 2.0f * progress);
+        for (int i = 0; i < positions.size(); i++) {
+            int startIndex = findPositionIndexIn(mirrorStartPositions, positions[i].id);
+            int endIndex = findPositionIndexIn(mirrorEndPositions, positions[i].id);
+            if (startIndex < 0 || endIndex < 0) continue;
+            GuiNodePosition& start = mirrorStartPositions[startIndex];
+            GuiNodePosition& end = mirrorEndPositions[endIndex];
+            positions[i].x = start.x + (end.x - start.x) * eased;
+            positions[i].y = start.y + (end.y - start.y) * eased;
+            positions[i].depth = eased < 0.5f ? start.depth : end.depth;
+        }
+        if (progress >= 1.0f) {
+            for (int i = 0; i < positions.size(); i++) {
+                int endIndex = findPositionIndexIn(mirrorEndPositions, positions[i].id);
+                if (endIndex >= 0) positions[i] = mirrorEndPositions[endIndex];
+            }
+            finishMirrorChallenge();
         }
     }
 
@@ -1914,6 +1978,37 @@ void GameApp::drawHeightPanel() {
 }
 
 void GameApp::drawTree() {
+    float mirrorProgress = 1.0f;
+    if (mirrorAnimationActive) {
+        mirrorProgress = mirrorAnimationTime / 0.9f;
+        if (mirrorProgress < 0.0f) mirrorProgress = 0.0f;
+        if (mirrorProgress > 1.0f) mirrorProgress = 1.0f;
+        mirrorProgress = mirrorProgress * mirrorProgress * (3.0f - 2.0f * mirrorProgress);
+        unsigned char oldAlpha = (unsigned char)(255.0f * (1.0f - mirrorProgress));
+        for (int i = 0; i < challengeStartView.treeNodes.size(); i++) {
+            ViewNode& oldNode = challengeStartView.treeNodes[i];
+            int oldParent = findPositionIndexIn(mirrorStartPositions, oldNode.id);
+            if (oldParent < 0) continue;
+            if (oldNode.leftId >= 0) {
+                int oldChild = findPositionIndexIn(mirrorStartPositions, oldNode.leftId);
+                if (oldChild >= 0) {
+                    DrawLineEx(Vector2{ mirrorStartPositions[oldParent].x, mirrorStartPositions[oldParent].y },
+                        Vector2{ mirrorStartPositions[oldChild].x, mirrorStartPositions[oldChild].y },
+                        3.0f, Color{ 92, 112, 138, oldAlpha });
+                }
+            }
+            if (oldNode.rightId >= 0) {
+                int oldChild = findPositionIndexIn(mirrorStartPositions, oldNode.rightId);
+                if (oldChild >= 0) {
+                    DrawLineEx(Vector2{ mirrorStartPositions[oldParent].x, mirrorStartPositions[oldParent].y },
+                        Vector2{ mirrorStartPositions[oldChild].x, mirrorStartPositions[oldChild].y },
+                        3.0f, Color{ 92, 112, 138, oldAlpha });
+                }
+            }
+        }
+    }
+    unsigned char newAlpha = mirrorAnimationActive
+        ? (unsigned char)(255.0f * mirrorProgress) : 255;
     for (int i = 0; i < view.treeNodes.size(); i++) {
         ViewNode& node = view.treeNodes[i];
         int parentPosition = findPositionIndex(node.id);
@@ -1922,7 +2017,7 @@ void GameApp::drawTree() {
             int childPosition = findPositionIndex(node.leftId);
             if (childPosition >= 0) {
                 Color edge = isInSkippedSubtree(node.leftId)
-                    ? Color{ 65, 72, 82, 255 } : Color{ 92, 112, 138, 255 };
+                    ? Color{ 65, 72, 82, newAlpha } : Color{ 92, 112, 138, newAlpha };
                 DrawLineEx(Vector2{ positions[parentPosition].x, positions[parentPosition].y },
                     Vector2{ positions[childPosition].x, positions[childPosition].y },
                     3.0f, edge);
@@ -1932,7 +2027,7 @@ void GameApp::drawTree() {
             int childPosition = findPositionIndex(node.rightId);
             if (childPosition >= 0) {
                 Color edge = isInSkippedSubtree(node.rightId)
-                    ? Color{ 65, 72, 82, 255 } : Color{ 92, 112, 138, 255 };
+                    ? Color{ 65, 72, 82, newAlpha } : Color{ 92, 112, 138, newAlpha };
                 DrawLineEx(Vector2{ positions[parentPosition].x, positions[parentPosition].y },
                     Vector2{ positions[childPosition].x, positions[childPosition].y },
                     3.0f, edge);
@@ -2244,6 +2339,13 @@ int GameApp::findNodeIndex(int id) {
 int GameApp::findPositionIndex(int id) {
     for (int i = 0; i < positions.size(); i++) {
         if (positions[i].id == id) return i;
+    }
+    return -1;
+}
+
+int GameApp::findPositionIndexIn(DynArray<GuiNodePosition>& source, int id) {
+    for (int i = 0; i < source.size(); i++) {
+        if (source[i].id == id) return i;
     }
     return -1;
 }
