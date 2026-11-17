@@ -52,6 +52,11 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     heapRaceExtractionCount = 0;
     heapRaceTotalExtractions = 7;
     heapRaceOptimalSteps = 8;
+    reconstructionRound = 0;
+    reconstructionNodeCount = 0;
+    reconstructionDragValue = -1;
+    reconstructionDragSourceSlot = -1;
+    reconstructionOptimalSteps = 13;
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
     heightOptimalSteps = 0;
@@ -82,6 +87,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     heapExtractWaiting = false;
     heapRaceChallenge = false;
     heapRaceWaiting = false;
+    reconstructionChallenge = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
@@ -131,6 +137,7 @@ void GameApp::runAction(int action, int value, int secondValue) {
     heapExtractWaiting = false;
     heapRaceChallenge = false;
     heapRaceWaiting = false;
+    reconstructionChallenge = false;
     selectedHeapIndex = -1;
     if (action == 0) {
         heapBuildSwaps = 0;
@@ -140,6 +147,10 @@ void GameApp::runAction(int action, int value, int secondValue) {
         heapRaceTotalExtractions = 0;
         heapRacePhase = 0;
         heapRaceSecondsRemaining = 0.0f;
+        reconstructionRound = 0;
+        reconstructionNodeCount = 0;
+        reconstructionDragValue = -1;
+        reconstructionDragSourceSlot = -1;
     }
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
@@ -1285,6 +1296,230 @@ void GameApp::finishHeapRaceChallenge(bool success) {
     screenState = 3;
 }
 
+void GameApp::startReconstructionChallenge() {
+    if (!isLevel(1, 2)) return;
+    reconstructionRound = 0;
+    reconstructionOptimalSteps = levelManager.getLevel(currentLevelIndex).optimalSteps;
+    alarmCapacity = levelManager.getLevel(currentLevelIndex).alarmCapacity;
+    if (alarmCapacity <= 0) alarmCapacity = 22;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    reconstructionChallenge = true;
+    challengeActive = true;
+    challengeFinished = false;
+    if (!prepareReconstructionRound()) {
+        reconstructionChallenge = false;
+        challengeActive = false;
+    }
+}
+
+bool GameApp::prepareReconstructionRound() {
+    int scenarioId = reconstructionRound == 0 ? 14 : 15;
+    EventLog setup;
+    if (!model.loadScenario(scenarioId, setup)) {
+        message = model.statusText();
+        return false;
+    }
+    refreshView();
+
+    EventLog firstEvents;
+    EventLog secondEvents;
+    int firstAction = reconstructionRound == 0
+        ? ACTION_TRAVERSE_PREORDER : ACTION_TRAVERSE_POSTORDER;
+    if (!model.performAction(firstAction, 0, 0, firstEvents) ||
+        !model.performAction(ACTION_TRAVERSE_INORDER, 0, 0, secondEvents)) {
+        message = model.statusText();
+        return false;
+    }
+    reconstructionFirstTraversal = reconstructionRound == 0 ? "PREORDER: " : "POSTORDER: ";
+    reconstructionSecondTraversal = "INORDER: ";
+    for (int i = 0; i < firstEvents.size(); i++) {
+        if (firstEvents.get(i).type != EV_VISIT) continue;
+        if (reconstructionFirstTraversal.back() != ' ') reconstructionFirstTraversal += "  ";
+        reconstructionFirstTraversal += std::to_string(firstEvents.get(i).value);
+    }
+    for (int i = 0; i < secondEvents.size(); i++) {
+        if (secondEvents.get(i).type != EV_VISIT) continue;
+        if (reconstructionSecondTraversal.back() != ' ') reconstructionSecondTraversal += "  ";
+        reconstructionSecondTraversal += std::to_string(secondEvents.get(i).value);
+    }
+
+    reconstructionExpectedSlots.clear();
+    reconstructionPlacedSlots.clear();
+    reconstructionTokens.clear();
+    for (int i = 0; i < 7; i++) {
+        reconstructionExpectedSlots.push(-1);
+        reconstructionPlacedSlots.push(-1);
+    }
+    DynArray<int> queuedIds;
+    DynArray<int> queuedSlots;
+    int rootId = -1;
+    for (int i = 0; i < view.treeNodes.size(); i++) {
+        if (view.treeNodes[i].parentId < 0) {
+            rootId = view.treeNodes[i].id;
+            break;
+        }
+    }
+    if (rootId < 0) {
+        message = "Blueprint has no root room.";
+        return false;
+    }
+    queuedIds.push(rootId);
+    queuedSlots.push(0);
+    int head = 0;
+    reconstructionNodeCount = 0;
+    while (head < queuedIds.size()) {
+        int id = queuedIds[head];
+        int slot = queuedSlots[head];
+        head++;
+        int nodeIndex = findNodeIndex(id);
+        if (nodeIndex < 0 || slot >= 7) continue;
+        reconstructionExpectedSlots[slot] = view.treeNodes[nodeIndex].value;
+        reconstructionNodeCount++;
+        if (view.treeNodes[nodeIndex].leftId >= 0) {
+            queuedIds.push(view.treeNodes[nodeIndex].leftId);
+            queuedSlots.push(slot * 2 + 1);
+        }
+        if (view.treeNodes[nodeIndex].rightId >= 0) {
+            queuedIds.push(view.treeNodes[nodeIndex].rightId);
+            queuedSlots.push(slot * 2 + 2);
+        }
+    }
+    for (int i = view.treeNodes.size() - 1; i >= 0; i--) {
+        reconstructionTokens.push(view.treeNodes[i].value);
+    }
+    reconstructionDragValue = -1;
+    reconstructionDragSourceSlot = -1;
+    events.clear();
+    currentEvent = -1;
+    nextEvent = 0;
+    alarmCapacity = levelManager.getLevel(currentLevelIndex).alarmCapacity;
+    if (alarmCapacity <= 0) alarmCapacity = 22;
+    message = reconstructionRound == 0
+        ? "Blueprint 1/2: use preorder and inorder to place each room."
+        : "Blueprint 2/2: use postorder and inorder to place each room.";
+    return true;
+}
+
+void GameApp::finishReconstructionChallenge(bool success) {
+    reconstructionChallenge = false;
+    challengeActive = false;
+    challengeFinished = true;
+    reconstructionDragValue = -1;
+    reconstructionDragSourceSlot = -1;
+    if (success && alarmSteps < alarmCapacity) {
+        if (wrongClicks == 0 && alarmSteps <= reconstructionOptimalSteps) stars = 3;
+        else if (wrongClicks <= 1 && alarmSteps * 4 <= reconstructionOptimalSteps * 5) stars = 2;
+        else stars = 1;
+        score = 1000 - 10 * alarmSteps - 50 * wrongClicks;
+        if (score < 0) score = 0;
+        message = "Both traversal blueprints reconstructed correctly.";
+    }
+    else {
+        stars = 0;
+        score = 0;
+        message = "Alarm full. Blueprint reconstruction failed - retry.";
+    }
+    levelManager.recordResult(currentLevelIndex, stars, score);
+    levelManager.saveProgress("campaign_progress.dat");
+    screenState = 3;
+}
+
+bool GameApp::reconstructionTokenIsPlaced(int value) {
+    if (value == reconstructionDragValue) return true;
+    for (int i = 0; i < reconstructionPlacedSlots.size(); i++) {
+        if (reconstructionPlacedSlots[i] == value) return true;
+    }
+    return false;
+}
+
+void GameApp::handleReconstructionInput() {
+    Vector2 mouse = GetMousePosition();
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
+            startReconstructionChallenge();
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
+            startReconstructionChallenge();
+            return;
+        }
+        if (reconstructionChallenge && CheckCollisionPointRec(mouse, Rectangle{ 20, 182, 220, 42 })) {
+            bool correct = true;
+            for (int i = 0; i < reconstructionPlacedSlots.size(); i++) {
+                if (reconstructionPlacedSlots[i] != reconstructionExpectedSlots[i]) correct = false;
+            }
+            if (!correct) {
+                alarmSteps++;
+                wrongClicks++;
+                message = "Blueprint mismatch (+1 alarm). Check the traversal orders and empty slot.";
+                if (alarmSteps >= alarmCapacity) finishReconstructionChallenge(false);
+                return;
+            }
+            if (reconstructionRound == 0) {
+                reconstructionRound = 1;
+                if (!prepareReconstructionRound()) finishReconstructionChallenge(false);
+                return;
+            }
+            finishReconstructionChallenge(true);
+            return;
+        }
+        if (!reconstructionChallenge) return;
+
+        const float slotX[7] = { 620, 440, 800, 350, 530, 710, 890 };
+        const float slotY[7] = { 330, 455, 455, 575, 575, 575, 575 };
+        for (int slot = 0; slot < 7; slot++) {
+            if (reconstructionPlacedSlots[slot] >= 0 &&
+                CheckCollisionPointCircle(mouse, Vector2{ slotX[slot], slotY[slot] }, 31.0f)) {
+                reconstructionDragValue = reconstructionPlacedSlots[slot];
+                reconstructionDragSourceSlot = slot;
+                reconstructionPlacedSlots[slot] = -1;
+                return;
+            }
+        }
+        for (int i = 0; i < reconstructionTokens.size(); i++) {
+            Rectangle tokenBounds{ 290.0f + i * 92.0f, 680.0f, 82.0f, 42.0f };
+            if (!reconstructionTokenIsPlaced(reconstructionTokens[i]) &&
+                CheckCollisionPointRec(mouse, tokenBounds)) {
+                reconstructionDragValue = reconstructionTokens[i];
+                reconstructionDragSourceSlot = -1;
+                return;
+            }
+        }
+    }
+
+    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT) && reconstructionDragValue >= 0) {
+        const float slotX[7] = { 620, 440, 800, 350, 530, 710, 890 };
+        const float slotY[7] = { 330, 455, 455, 575, 575, 575, 575 };
+        int destination = -1;
+        for (int slot = 0; slot < 7; slot++) {
+            if (CheckCollisionPointCircle(mouse, Vector2{ slotX[slot], slotY[slot] }, 36.0f)) {
+                destination = slot;
+                break;
+            }
+        }
+        if (destination >= 0) {
+            int displaced = reconstructionPlacedSlots[destination];
+            reconstructionPlacedSlots[destination] = reconstructionDragValue;
+            if (reconstructionDragSourceSlot >= 0 && reconstructionDragSourceSlot != destination) {
+                reconstructionPlacedSlots[reconstructionDragSourceSlot] = displaced;
+            }
+            if (reconstructionDragSourceSlot != destination) alarmSteps++;
+            if (alarmSteps >= alarmCapacity) {
+                finishReconstructionChallenge(false);
+            }
+            else message = "Room placed. Submit when every traversal position is reconstructed.";
+        }
+        else if (reconstructionDragSourceSlot >= 0) {
+            reconstructionPlacedSlots[reconstructionDragSourceSlot] = reconstructionDragValue;
+        }
+        reconstructionDragValue = -1;
+        reconstructionDragSourceSlot = -1;
+    }
+}
+
 void GameApp::handleHeightClick(int id) {
     if (heightPhase != 1) {
         message = "All heights are in. Type the diameter and press Enter.";
@@ -1872,6 +2107,11 @@ void GameApp::processInput() {
         }
     }
 
+    if (screenState == 2 && isLevel(1, 2)) {
+        handleReconstructionInput();
+        return;
+    }
+
     if (!IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         return;
     }
@@ -2431,10 +2671,14 @@ void GameApp::draw() {
     DrawText("VAULT HEIST", 24, 22, 30, Color{ 240, 220, 170, 255 });
     DrawText("Tree Lab - GUI mock connected through GameModel", 285, 54, 16,
         Color{ 175, 190, 210, 255 });
-    drawPlaybackControls();
+    bool reconstructionLevel = isLevel(1, 2);
+    if (!reconstructionLevel) drawPlaybackControls();
     DrawLine(260, 80, 260, windowHeight - 24, Color{ 62, 76, 96, 255 });
 
-    if (view.viewType == MODEL_VIEW_HEAP) {
+    if (reconstructionLevel) {
+        drawReconstructionChallenge();
+    }
+    else if (view.viewType == MODEL_VIEW_HEAP) {
         if (isLevel(4, 2)) drawHeapifyControls();
         else if (isLevel(4, 3)) drawHeapExtractControls();
         else if (isLevel(4, 4)) drawHeapRaceControls();
@@ -2997,6 +3241,78 @@ void GameApp::drawHeapView() {
         DrawText(value.c_str(), x + 8, 671, 18, Color{ 230, 235, 242, 255 });
         DrawText(TextFormat("%i", i), x + 8, 695, 12,
             Color{ 150, 165, 185, 255 });
+    }
+}
+
+void GameApp::drawReconstructionChallenge() {
+    DrawText("ACT 1.2 - DECODE THE BLUEPRINT", 24, 55, 14,
+        Color{ 150, 175, 205, 255 });
+    drawButton(Rectangle{ 20, 82, 220, 42 }, "Start blueprint", true);
+    drawButton(Rectangle{ 20, 132, 220, 42 }, "Restart level", true);
+    drawButton(Rectangle{ 20, 182, 220, 42 }, "Submit blueprint", reconstructionChallenge);
+    DrawText(TextFormat("Round: %i / 2", reconstructionRound + 1), 24, 248, 15,
+        Color{ 240, 220, 170, 255 });
+    DrawText("Drag rooms into slots.", 24, 278, 14, Color{ 205, 212, 224, 255 });
+    DrawText("Leave the unused slot empty.", 24, 298, 12,
+        Color{ 175, 190, 210, 255 });
+    DrawText("ALARM", 24, 405, 15, Color{ 150, 175, 205, 255 });
+    int capacity = alarmCapacity > 0 ? alarmCapacity : 22;
+    int alarm = alarmSteps > capacity ? capacity : alarmSteps;
+    DrawRectangle(24, 430, 210, 14, Color{ 58, 66, 78, 255 });
+    DrawRectangle(24, 430, 210 * alarm / capacity, 14,
+        Color{ 216, 117, 73, 255 });
+    DrawText(TextFormat("%i / %i steps", alarmSteps, capacity), 24, 451, 15,
+        Color{ 205, 212, 224, 255 });
+    DrawText(TextFormat("Wrong submissions: %i", wrongClicks), 24, 478, 13,
+        Color{ 205, 212, 224, 255 });
+
+    DrawText(reconstructionFirstTraversal.c_str(), 290, 112, 17,
+        Color{ 240, 220, 170, 255 });
+    DrawText(reconstructionSecondTraversal.c_str(), 290, 145, 17,
+        Color{ 205, 212, 224, 255 });
+
+    const float slotX[7] = { 620, 440, 800, 350, 530, 710, 890 };
+    const float slotY[7] = { 330, 455, 455, 575, 575, 575, 575 };
+    for (int i = 1; i < 7; i++) {
+        int parent = (i - 1) / 2;
+        DrawLineEx(Vector2{ slotX[parent], slotY[parent] },
+            Vector2{ slotX[i], slotY[i] }, 3.0f, Color{ 72, 88, 108, 255 });
+    }
+    for (int i = 0; i < 7; i++) {
+        bool filled = reconstructionPlacedSlots.size() == 7 &&
+            reconstructionPlacedSlots[i] >= 0;
+        DrawCircleV(Vector2{ slotX[i], slotY[i] }, 30.0f,
+            filled ? Color{ 47, 76, 112, 255 } : Color{ 25, 34, 48, 255 });
+        DrawCircleLines((int)slotX[i], (int)slotY[i], 30.0f,
+            Color{ 150, 175, 205, 255 });
+        if (filled) {
+            std::string value = std::to_string(reconstructionPlacedSlots[i]);
+            DrawText(value.c_str(), (int)slotX[i] - 15, (int)slotY[i] - 9, 18,
+                Color{ 255, 255, 255, 255 });
+        }
+        else {
+            DrawText("?", (int)slotX[i] - 5, (int)slotY[i] - 10, 20,
+                Color{ 110, 125, 145, 255 });
+        }
+    }
+
+    DrawText("ROOM TOKENS", 290, 640, 15, Color{ 150, 175, 205, 255 });
+    for (int i = 0; i < reconstructionTokens.size(); i++) {
+        int value = reconstructionTokens[i];
+        if (reconstructionTokenIsPlaced(value)) continue;
+        Rectangle bounds{ 290.0f + i * 92.0f, 680.0f, 82.0f, 42.0f };
+        DrawRectangleRounded(bounds, 0.12f, 5, Color{ 42, 57, 78, 255 });
+        DrawRectangleLinesEx(bounds, 2.0f, Color{ 91, 113, 143, 255 });
+        std::string label = std::to_string(value);
+        DrawText(label.c_str(), (int)bounds.x + 18, (int)bounds.y + 11, 17,
+            Color{ 230, 235, 242, 255 });
+    }
+    if (reconstructionDragValue >= 0 && IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+        Vector2 mouse = GetMousePosition();
+        DrawCircleV(mouse, 25.0f, Color{ 205, 154, 64, 255 });
+        std::string label = std::to_string(reconstructionDragValue);
+        DrawText(label.c_str(), (int)mouse.x - 12, (int)mouse.y - 8, 16,
+            Color{ 255, 255, 255, 255 });
     }
 }
 

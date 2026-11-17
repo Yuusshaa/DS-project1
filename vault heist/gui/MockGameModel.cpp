@@ -205,6 +205,46 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         return true;
     }
 
+    if (scenarioId == 14 || scenarioId == 15) {
+        int rows[7][5];
+        int count = 0;
+        if (scenarioId == 14) {
+            int fixture[6][5] = {
+                {1, 50, 2, 3, -1}, {2, 30, 4, 5, 1},
+                {3, 70, -1, 6, 1}, {4, 20, -1, -1, 2},
+                {5, 40, -1, -1, 2}, {6, 80, -1, -1, 3}
+            };
+            count = 6;
+            for (int i = 0; i < count; i++) for (int j = 0; j < 5; j++) rows[i][j] = fixture[i][j];
+        }
+        else {
+            int fixture[7][5] = {
+                {1, 45, 2, 3, -1}, {2, 25, 4, 5, 1},
+                {3, 75, 6, 7, 1}, {4, 10, -1, -1, 2},
+                {5, 35, -1, -1, 2}, {6, 60, -1, -1, 3},
+                {7, 90, -1, -1, 3}
+            };
+            count = 7;
+            for (int i = 0; i < count; i++) for (int j = 0; j < 5; j++) rows[i][j] = fixture[i][j];
+        }
+        for (int i = 0; i < count; i++) {
+            ViewNode node;
+            node.id = rows[i][0];
+            node.value = rows[i][1];
+            node.leftId = rows[i][2];
+            node.rightId = rows[i][3];
+            node.parentId = rows[i][4];
+            view.treeNodes.push(node);
+        }
+        view.viewType = MODEL_VIEW_TREE;
+        refreshMetadata();
+        message = scenarioId == 14
+            ? "Mock traversal blueprint round one loaded"
+            : "Mock traversal blueprint round two loaded";
+        events.clear();
+        return true;
+    }
+
     if (scenarioId == 31) {
         ViewNode node;
         node.id = 1; node.value = 50; node.leftId = 2; node.rightId = 3;

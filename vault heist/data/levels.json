@@ -16,8 +16,11 @@
       "number": 2,
       "title": "Rebuild Blueprint",
       "concept": "tree reconstruction",
-      "objective": "Reconstruct the hidden tree from traversal orders.",
-      "implemented": false
+      "objective": "Reconstruct two hidden trees from preorder plus inorder, then postorder plus inorder.",
+      "scenarioId": 14,
+      "optimalSteps": 13,
+      "alarmCapacity": 22,
+      "implemented": true
     },
     {
       "act": 1,

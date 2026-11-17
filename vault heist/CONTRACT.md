@@ -83,6 +83,16 @@ default value from `Event`.
 - The GUI calls the operation, refreshes `ModelView`, and renders the updated left/right links.
   The GUI does not swap child links itself.
 
+## Act 1.2 traversal reconstruction
+
+- Mock scenario 14 is the preorder-plus-inorder round; scenario 15 is the postorder-plus-inorder
+  round. Each is exposed as a tree through `ModelView` and as traversal sequences through
+  `ACTION_TRAVERSE_PREORDER`/`POSTORDER` and `ACTION_TRAVERSE_INORDER`.
+- The GUI displays the traversal outputs and lets players drag room tokens into seven possible
+  binary-tree slots. Correct placements must match the scenario's tree; an unused slot stays empty.
+- Yusha's model must load scenarios 14 and 15 and emit `EV_VISIT.value` in traversal order before
+  this level is integrated with the real model.
+
 ## Act 3.2/3.3 rotation interface
 
 - `ACTION_ROTATION_CASE` (19) returns the lowest unbalanced node in `EV_DONE.nodeId` and the

@@ -28,6 +28,9 @@ private:
     ModelView challengeFinalView;
     EventLog events;
     DynArray<int> expectedRoute;
+    DynArray<int> reconstructionExpectedSlots;
+    DynArray<int> reconstructionTokens;
+    DynArray<int> reconstructionPlacedSlots;
     DynArray<int> expectedCompareCodes;
     DynArray<int> skippedSubtreeRoots;
     DynArray<int> balanceFound;
@@ -39,6 +42,8 @@ private:
     std::string sandboxValueInput;
     std::string sandboxSecondInput;
     std::string answerInput;        // Act 1.3: digits typed by the player
+    std::string reconstructionFirstTraversal;
+    std::string reconstructionSecondTraversal;
     int windowWidth;
     int windowHeight;
     int screenState; // 0=menu, 1=campaign, 2=level, 3=result
@@ -89,6 +94,11 @@ private:
     int heapRaceExtractionCount;
     int heapRaceTotalExtractions;
     int heapRaceOptimalSteps;
+    int reconstructionRound;
+    int reconstructionNodeCount;
+    int reconstructionDragValue;
+    int reconstructionDragSourceSlot;
+    int reconstructionOptimalSteps;
     int heightOptimalSteps;         // Act 1.3: rooms + 1 diameter report
     int expectedDeleteCase;
     int rangeLow;
@@ -118,6 +128,7 @@ private:
     bool heapExtractWaiting;
     bool heapRaceChallenge;
     bool heapRaceWaiting;
+    bool reconstructionChallenge;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
@@ -161,6 +172,11 @@ private:
     void finishHeapExtractChallenge(bool success);
     void startHeapRaceChallenge();
     void finishHeapRaceChallenge(bool success);
+    void startReconstructionChallenge();
+    bool prepareReconstructionRound();
+    void finishReconstructionChallenge(bool success);
+    void handleReconstructionInput();
+    bool reconstructionTokenIsPlaced(int value);
     int enteredHeightFor(int id);
     bool isLevel(int act, int number);
     void drawHeightPanel();
@@ -186,6 +202,7 @@ private:
     void drawHeapExtractControls();
     void drawHeapRaceControls();
     void drawHeapFinalControls();
+    void drawReconstructionChallenge();
     void executeSandboxAction(int action);
     void restartPlayback();
     void stepPlayback(int direction);
