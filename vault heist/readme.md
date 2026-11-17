@@ -52,6 +52,9 @@ msbuild VaultHeist.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64 /p:Pr
 - Open **Leaderboard** to view the ten best Endless runs on this computer.
   Entries rank by survival time, then valid operations, and are saved in
   `endless_leaderboard.dat` in the application's working directory.
+- Choose **Save & main menu** during an Endless run to pause it, then select
+  **Continue Endless** to resume. The current BST and run state are saved in
+  `endless_run.dat` in the application's working directory.
 - Click a **Quiz** button to start that traversal challenge, then click rooms
   in the requested order.
 - Click **Search 60** to show a sample BST search path.

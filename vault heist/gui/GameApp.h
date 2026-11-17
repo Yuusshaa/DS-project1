@@ -165,6 +165,7 @@ private:
     bool endlessActive;
     bool endlessPromptActive;
     bool endlessOperationWaiting;
+    bool endlessSaveAvailable;
     float eventTimer;
     float mirrorAnimationTime;
     float heapRaceSecondsRemaining;
@@ -226,6 +227,9 @@ private:
     void finishAvlPredictionChallenge(bool success);
     void startOrderStatisticChallenge();
     void startEndlessRun();
+    void continueEndlessRun();
+    bool saveEndlessRun();
+    void removeEndlessSave();
     void makeEndlessPrompt();
     void chooseEndlessOperation(int action);
     void missEndlessPrompt(std::string reason);

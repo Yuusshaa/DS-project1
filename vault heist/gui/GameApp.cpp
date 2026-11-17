@@ -124,6 +124,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     endlessActive = false;
     endlessPromptActive = false;
     endlessOperationWaiting = false;
+    endlessSaveAvailable = false;
     eventTimer = 0.0f;
     heapRaceSecondsRemaining = 0.0f;
     heapRaceTimeLimit = 60.0f;
@@ -137,6 +138,9 @@ void GameApp::run() {
     InitWindow(windowWidth, windowHeight, "Vault Heist - Tree Lab");
     SetTargetFPS(60);
     loadLeaderboard();
+    FILE* endlessSave = std::fopen("endless_run.dat", "r");
+    endlessSaveAvailable = endlessSave != nullptr;
+    if (endlessSave != nullptr) std::fclose(endlessSave);
     if (levelManager.loadFromJson("data/levels.json")) {
         levelManager.loadProgress("campaign_progress.dat");
         currentLevelIndex = levelManager.findLevel(1, 1);
@@ -272,6 +276,8 @@ int GameApp::nextEndlessRandom() {
 }
 
 void GameApp::startEndlessRun() {
+    removeEndlessSave();
+    endlessSaveAvailable = false;
     currentLevelIndex = -1;
     endlessSeed = (int)(GetTime() * 1000.0) + 1;
     long long normalizedSeed = (long long)endlessSeed % 2147483646LL;
@@ -303,6 +309,136 @@ void GameApp::startEndlessRun() {
     eventTimer = 0.0f;
     refreshView();
     makeEndlessPrompt();
+}
+
+void GameApp::continueEndlessRun() {
+    FILE* file = std::fopen("endless_run.dat", "r");
+    if (file == nullptr) {
+        endlessSaveAvailable = false;
+        message = "No saved Endless run is available.";
+        return;
+    }
+
+    char version[8] = {};
+    float savedTime = 0.0f;
+    float savedPromptSeconds = 0.0f;
+    float savedPromptLimit = 0.0f;
+    int savedLives = 0;
+    int savedOperations = 0;
+    int savedSeed = 0;
+    int savedRandomState = 0;
+    int savedAction = 0;
+    int savedKey = 0;
+    int savedPromptActive = 0;
+    int savedOperationWaiting = 0;
+    int nodeCount = 0;
+    bool valid = std::fscanf(file, "%7s", version) == 1 &&
+        std::fscanf(file, "%f %d %d %d %d %d %d %f %f %d %d %d",
+            &savedTime, &savedLives, &savedOperations, &savedSeed,
+            &savedRandomState, &savedAction, &savedKey, &savedPromptSeconds,
+            &savedPromptLimit, &savedPromptActive, &savedOperationWaiting,
+            &nodeCount) == 12;
+    if (std::string(version) != "VHES1" || savedTime < 0.0f ||
+        savedLives < 1 || savedLives > 3 || savedOperations < 0 ||
+        savedRandomState <= 0 ||
+        (savedAction != ACTION_INSERT && savedAction != ACTION_DELETE) ||
+        savedPromptSeconds < 0.0f || savedPromptLimit < 1.0f ||
+        nodeCount < 0 || nodeCount > 100) valid = false;
+
+    DynArray<int> savedKeys;
+    for (int i = 0; valid && i < nodeCount; i++) {
+        int key = 0;
+        if (std::fscanf(file, "%d", &key) != 1) valid = false;
+        else savedKeys.push(key);
+    }
+    std::fclose(file);
+    if (!valid) {
+        message = "Saved Endless run is invalid or damaged.";
+        return;
+    }
+
+    EventLog setup;
+    if (!model.loadScenario(25, setup)) {
+        message = model.statusText();
+        return;
+    }
+    EventLog restoreEvents;
+    for (int i = 0; i < savedKeys.size(); i++) {
+        restoreEvents.clear();
+        if (!model.performAction(ACTION_INSERT, savedKeys[i], 0, restoreEvents)) {
+            message = "Could not rebuild the saved Endless tree.";
+            return;
+        }
+    }
+
+    endlessSurvivalTime = savedTime;
+    endlessScore = (int)savedTime;
+    endlessLives = savedLives;
+    endlessOperations = savedOperations;
+    endlessSeed = savedSeed;
+    endlessRandomState = savedRandomState;
+    endlessTargetAction = savedAction;
+    endlessTargetKey = savedKey;
+    endlessPromptSeconds = savedPromptSeconds;
+    endlessPromptLimit = savedPromptLimit;
+    endlessPromptActive = savedPromptActive != 0;
+    endlessOperationWaiting = savedOperationWaiting != 0;
+    endlessActive = true;
+    events.clear();
+    currentEvent = -1;
+    nextEvent = 0;
+    animationPlaying = false;
+    currentLevelIndex = -1;
+    refreshView();
+    screenState = 5;
+    removeEndlessSave();
+    endlessSaveAvailable = false;
+    if (!endlessPromptActive && endlessOperationWaiting) {
+        endlessOperationWaiting = false;
+        makeEndlessPrompt();
+    }
+    else {
+        message = "Saved run restored. Continue the incoming operation.";
+    }
+}
+
+bool GameApp::saveEndlessRun() {
+    if (!endlessActive || screenState != 5) return false;
+    FILE* file = std::fopen("endless_run.dat", "w");
+    if (file == nullptr) {
+        message = "Could not write endless_run.dat.";
+        return false;
+    }
+
+    std::fprintf(file, "VHES1\n%.3f %d %d %d %d %d %d %.3f %.3f %d %d %d\n",
+        endlessSurvivalTime, endlessLives, endlessOperations, endlessSeed,
+        endlessRandomState, endlessTargetAction, endlessTargetKey,
+        endlessPromptSeconds, endlessPromptLimit, endlessPromptActive ? 1 : 0,
+        endlessOperationWaiting ? 1 : 0, view.treeNodes.size());
+    int maximumDepth = 0;
+    for (int i = 0; i < positions.size(); i++) {
+        if (positions[i].depth > maximumDepth) maximumDepth = positions[i].depth;
+    }
+    for (int depth = 0; depth <= maximumDepth; depth++) {
+        for (int i = 0; i < positions.size(); i++) {
+            if (positions[i].depth != depth) continue;
+            int nodeIndex = findNodeIndex(positions[i].id);
+            if (nodeIndex >= 0) std::fprintf(file, "%d ", view.treeNodes[nodeIndex].value);
+        }
+    }
+    std::fprintf(file, "\n");
+    bool saved = std::fclose(file) == 0;
+    if (!saved) {
+        message = "Could not finish writing endless_run.dat.";
+        return false;
+    }
+    endlessSaveAvailable = true;
+    message = "Endless run saved. Select Continue Endless from the main menu.";
+    return true;
+}
+
+void GameApp::removeEndlessSave() {
+    std::remove("endless_run.dat");
 }
 
 void GameApp::makeEndlessPrompt() {
@@ -389,6 +525,8 @@ void GameApp::finishEndlessRun() {
     endlessPromptActive = false;
     endlessOperationWaiting = false;
     endlessScore = (int)endlessSurvivalTime;
+    removeEndlessSave();
+    endlessSaveAvailable = false;
     recordEndlessScore();
     screenState = 6;
 }
@@ -2610,6 +2748,10 @@ void GameApp::processInput() {
         else if (CheckCollisionPointRec(mouse, Rectangle{ 490, 542, 300, 58 })) {
             screenState = 7;
         }
+        else if (CheckCollisionPointRec(mouse, Rectangle{ 490, 616, 300, 58 }) &&
+            endlessSaveAvailable) {
+            continueEndlessRun();
+        }
         return;
     }
 
@@ -2762,6 +2904,10 @@ void GameApp::processInput() {
         }
         if (CheckCollisionPointRec(mouse, Rectangle{ 543, 82, 70, 38 })) {
             stepPlayback(1);
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 24, 440, 210, 42 })) {
+            if (saveEndlessRun()) screenState = 0;
             return;
         }
         if (endlessPromptActive && !animationPlaying) {
@@ -3393,10 +3539,11 @@ void GameApp::drawMainMenu() {
     drawButton(Rectangle{ 490, 394, 300, 58 }, "Sandbox", true);
     drawButton(Rectangle{ 490, 468, 300, 58 }, "Endless survival", true);
     drawButton(Rectangle{ 490, 542, 300, 58 }, "Leaderboard", true);
-    DrawText("Choose a mode to enter the vault.", 474, 630, 18,
+    drawButton(Rectangle{ 490, 616, 300, 58 }, "Continue Endless", endlessSaveAvailable);
+    DrawText("Choose a mode to enter the vault.", 474, 694, 18,
         Color{ 150, 165, 185, 255 });
     if (levelManager.count() == 0) {
-        DrawText("Level data failed to load: data/levels.json", 390, 595, 18,
+        DrawText("Level data failed to load: data/levels.json", 390, 690, 18,
             Color{ 220, 135, 115, 255 });
     }
 }
@@ -3442,6 +3589,7 @@ void GameApp::drawEndlessMode() {
         endlessPromptActive && !animationPlaying);
     DrawText("Three missed orders end the run.", 24, 398, 13,
         Color{ 150, 165, 185, 255 });
+    drawButton(Rectangle{ 24, 440, 210, 42 }, "Save & main menu", true);
     drawTree();
     drawEventLog();
     DrawText(message.c_str(), 285, windowHeight - 42, 18,
