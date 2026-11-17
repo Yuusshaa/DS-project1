@@ -175,6 +175,16 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         return true;
     }
 
+    if (scenarioId == 6) {
+        int values[8] = { 9, 4, 8, 7, 3, 5, 2, 1 };
+        view.viewType = MODEL_VIEW_HEAP;
+        view.heapSize = 8;
+        for (int i = 0; i < 8; i++) view.heapValues.push(values[i]);
+        message = "Max heap loaded; extract each maximum into the sorted region";
+        events.clear();
+        return true;
+    }
+
     if (scenarioId == 31) {
         ViewNode node;
         node.id = 1; node.value = 50; node.leftId = 2; node.rightId = 3;
@@ -723,6 +733,80 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
         finished.nodeId = start;
         events.add(finished);
         message = "Sift-down complete";
+    }
+    else if (action == ACTION_EXTRACT_MAX) {
+        if (view.heapSize <= 1) {
+            message = "No more maximum values can be extracted";
+            return false;
+        }
+        int last = view.heapSize - 1;
+        int maximum = view.heapValues[0];
+        Event extraction;
+        extraction.type = EV_EXTRACT_MAX;
+        extraction.nodeId = 0;
+        extraction.otherId = last;
+        extraction.value = maximum;
+        events.add(extraction);
+
+        int temp = view.heapValues[0];
+        view.heapValues[0] = view.heapValues[last];
+        view.heapValues[last] = temp;
+        Event swapped;
+        swapped.type = EV_HEAP_SWAP;
+        swapped.nodeId = 0;
+        swapped.otherId = last;
+        swapped.value = maximum;
+        events.add(swapped);
+
+        Event marked;
+        marked.type = EV_MARK_SORTED;
+        marked.nodeId = last;
+        marked.value = maximum;
+        events.add(marked);
+
+        view.heapSize--;
+        Event sizeChanged;
+        sizeChanged.type = EV_HEAP_SIZE_CHANGE;
+        sizeChanged.value = view.heapSize;
+        events.add(sizeChanged);
+
+        if (view.heapSize > 1) {
+            Event started;
+            started.type = EV_HEAPIFY_START;
+            started.nodeId = 0;
+            events.add(started);
+            int current = 0;
+            while (true) {
+                int left = current * 2 + 1;
+                int right = current * 2 + 2;
+                int largest = current;
+                if (left < view.heapSize && view.heapValues[left] > view.heapValues[largest]) largest = left;
+                if (right < view.heapSize && view.heapValues[right] > view.heapValues[largest]) largest = right;
+                if (largest == current) break;
+                temp = view.heapValues[current];
+                view.heapValues[current] = view.heapValues[largest];
+                view.heapValues[largest] = temp;
+                Event siftSwap;
+                siftSwap.type = EV_HEAP_SWAP;
+                siftSwap.nodeId = current;
+                siftSwap.otherId = largest;
+                siftSwap.value = view.heapValues[current];
+                events.add(siftSwap);
+                current = largest;
+            }
+            Event finished;
+            finished.type = EV_HEAPIFY_DONE;
+            finished.nodeId = 0;
+            events.add(finished);
+        }
+        if (view.heapSize == 1) {
+            Event finalSorted;
+            finalSorted.type = EV_MARK_SORTED;
+            finalSorted.nodeId = 0;
+            finalSorted.value = view.heapValues[0];
+            events.add(finalSorted);
+        }
+        message = "Maximum extracted; active heap restored";
     }
     else if (action == ACTION_IS_MAX_HEAP) {
         bool valid = true;

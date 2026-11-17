@@ -46,6 +46,8 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     heapifyOperationCount = 0;
     heapifyOptimalSteps = 1;
     heapCompletionType = 0;
+    heapExtractCount = 0;
+    heapExtractOptimalSteps = 7;
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
     heightOptimalSteps = 0;
@@ -72,6 +74,8 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     heapifyChallenge = false;
     heapCompletionPending = false;
     heapCompletionReady = false;
+    heapExtractChallenge = false;
+    heapExtractWaiting = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
@@ -115,10 +119,13 @@ void GameApp::runAction(int action, int value, int secondValue) {
     heapifyChallenge = false;
     heapCompletionPending = false;
     heapCompletionReady = false;
+    heapExtractChallenge = false;
+    heapExtractWaiting = false;
     selectedHeapIndex = -1;
     if (action == 0) {
         heapBuildSwaps = 0;
         heapifyOperationCount = 0;
+        heapExtractCount = 0;
     }
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
@@ -1121,6 +1128,71 @@ void GameApp::finishHeapifyChallenge(bool success) {
     screenState = 3;
 }
 
+void GameApp::startHeapExtractChallenge() {
+    if (!isLevel(4, 3)) return;
+    LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
+    EventLog setup;
+    if (!model.loadScenario(level.scenarioId, setup)) {
+        message = model.statusText();
+        return;
+    }
+    refreshView();
+    events.clear();
+    currentEvent = -1;
+    nextEvent = 0;
+    heapExtractCount = 0;
+    heapExtractChallenge = true;
+    heapExtractWaiting = false;
+    heapCompletionPending = false;
+    heapCompletionReady = false;
+    heapCompletionType = 0;
+    heapExtractOptimalSteps = level.optimalSteps > 0 ? level.optimalSteps : 7;
+    alarmCapacity = level.alarmCapacity > 0 ? level.alarmCapacity :
+        (3 * heapExtractOptimalSteps + 1) / 2 + 2;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    challengeActive = true;
+    challengeFinished = false;
+    animationPlaying = false;
+    message = "Extract the root maximum; watch it enter the sorted region.";
+}
+
+void GameApp::finishHeapExtractChallenge(bool success) {
+    heapExtractChallenge = false;
+    heapExtractWaiting = false;
+    challengeActive = false;
+    challengeFinished = true;
+    if (success && !heapCompletionReady) {
+        heapCompletionPending = true;
+        heapCompletionType = 3;
+        animationPlaying = true;
+        currentEvent = -1;
+        nextEvent = 0;
+        eventTimer = 0.0f;
+        message = "All maximums extracted. Reviewing the final extraction...";
+        return;
+    }
+    heapCompletionReady = false;
+    if (success && alarmSteps < alarmCapacity) {
+        if (wrongClicks == 0 && alarmSteps <= heapifyOptimalSteps) stars = 3;
+        else if (wrongClicks <= 1 && alarmSteps * 4 <= heapifyOptimalSteps * 5) stars = 2;
+        else stars = 1;
+        score = 1000 - 10 * alarmSteps - 50 * wrongClicks;
+        if (score < 0) score = 0;
+        message = "All treasures extracted in descending priority order.";
+    }
+    else {
+        stars = 0;
+        score = 0;
+        message = "Alarm full. Extraction level failed - retry.";
+    }
+    levelManager.recordResult(currentLevelIndex, stars, score);
+    levelManager.saveProgress("campaign_progress.dat");
+    screenState = 3;
+}
+
 void GameApp::handleHeightClick(int id) {
     if (heightPhase != 1) {
         message = "All heights are in. Type the diameter and press Enter.";
@@ -1844,6 +1916,44 @@ void GameApp::processInput() {
     bool isRotationLevel = isLevel(3, 2) || isLevel(3, 3);
     bool isHeapBuildLevel = isLevel(4, 1);
     bool isHeapifyLevel = isLevel(4, 2);
+    bool isHeapExtractLevel = isLevel(4, 3);
+    if (isHeapExtractLevel) {
+        if (heapCompletionPending || heapExtractWaiting) return;
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
+            startHeapExtractChallenge();
+            return;
+        }
+        if (heapExtractChallenge && CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
+            EventLog operationEvents;
+            events.clear();
+            if (!model.performAction(ACTION_EXTRACT_MAX, 0, 0, operationEvents)) {
+                alarmSteps++;
+                wrongClicks++;
+                message = model.statusText();
+                if (alarmSteps >= alarmCapacity) finishHeapExtractChallenge(false);
+                return;
+            }
+            heapExtractCount++;
+            alarmSteps++;
+            for (int i = 0; i < operationEvents.size(); i++) events.add(operationEvents.get(i));
+            refreshView();
+            currentEvent = -1;
+            nextEvent = 0;
+            eventTimer = 0.0f;
+            animationPlaying = true;
+            if (view.heapSize <= 1) finishHeapExtractChallenge(true);
+            else {
+                heapExtractWaiting = true;
+                message = "Maximum extracted. Let the heapify events finish, then continue.";
+            }
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 182, 220, 42 })) {
+            runAction(0, 0, 0);
+            return;
+        }
+        return;
+    }
     if (isHeapifyLevel) {
         if (heapCompletionPending) return;
         if (CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
@@ -2138,9 +2248,11 @@ void GameApp::update(float deltaTime) {
                 heapCompletionPending = false;
                 heapCompletionReady = true;
                 if (heapCompletionType == 1) finishHeapBuildChallenge(true);
-                else finishHeapifyChallenge(true);
+                else if (heapCompletionType == 2) finishHeapifyChallenge(true);
+                else finishHeapExtractChallenge(true);
                 return;
             }
+            if (heapExtractWaiting) heapExtractWaiting = false;
         }
         eventTimer = 0.0f;
     }
@@ -2178,6 +2290,7 @@ void GameApp::draw() {
 
     if (view.viewType == MODEL_VIEW_HEAP) {
         if (isLevel(4, 2)) drawHeapifyControls();
+        else if (isLevel(4, 3)) drawHeapExtractControls();
         else drawHeapControls();
         drawHeapView();
     }
@@ -2777,6 +2890,28 @@ void GameApp::drawHeapifyControls() {
     DrawText(TextFormat("%i / %i steps", alarmSteps, capacity), 24, 451, 15,
         Color{ 205, 212, 224, 255 });
     DrawText(TextFormat("Wrong selections: %i", wrongClicks), 24, 478, 15,
+        Color{ 205, 212, 224, 255 });
+}
+
+void GameApp::drawHeapExtractControls() {
+    DrawText("ACT 4.3 - EXTRACT MAX", 24, 55, 15, Color{ 150, 175, 205, 255 });
+    drawButton(Rectangle{ 20, 82, 220, 42 }, "Start extraction", true);
+    drawButton(Rectangle{ 20, 132, 220, 42 }, "Extract maximum",
+        heapExtractChallenge && !heapExtractWaiting);
+    drawButton(Rectangle{ 20, 182, 220, 42 }, "Reset level", true);
+    DrawText("Each maximum moves to the", 20, 242, 13, Color{ 205, 212, 224, 255 });
+    DrawText("sorted region at the right.", 20, 262, 13, Color{ 205, 212, 224, 255 });
+    DrawText(TextFormat("Extracted: %i / %i", heapExtractCount, heapExtractOptimalSteps),
+        20, 292, 14, Color{ 205, 212, 224, 255 });
+    DrawText("ALARM", 24, 405, 15, Color{ 150, 175, 205, 255 });
+    int capacity = alarmCapacity > 0 ? alarmCapacity : 10;
+    int alarm = alarmSteps > capacity ? capacity : alarmSteps;
+    DrawRectangle(24, 430, 210, 14, Color{ 58, 66, 78, 255 });
+    DrawRectangle(24, 430, 210 * alarm / capacity, 14,
+        Color{ 216, 117, 73, 255 });
+    DrawText(TextFormat("%i / %i steps", alarmSteps, capacity), 24, 451, 15,
+        Color{ 205, 212, 224, 255 });
+    DrawText(TextFormat("Errors: %i", wrongClicks), 24, 478, 15,
         Color{ 205, 212, 224, 255 });
 }
 

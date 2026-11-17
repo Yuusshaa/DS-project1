@@ -117,6 +117,17 @@ default value from `Event`.
 - Act 4.2 completes when the GUI queries `ACTION_IS_MAX_HEAP` and receives `EV_DONE.value = 1`.
 - Scenario 5 and action 10 must be supported by Yusha's model facade before integration.
 
+## Act 4.3 extract maximum
+
+- Scenario 6 loads the valid heap `{9, 4, 8, 7, 3, 5, 2, 1}`.
+- `ACTION_EXTRACT_MAX` (11) removes the active root, places it in the sorted region at the
+  active heap's final index, decreases `heapSize`, and sifts down the replacement root.
+- Each extraction emits `EV_EXTRACT_MAX`, `EV_HEAP_SWAP`, `EV_MARK_SORTED`, and
+  `EV_HEAP_SIZE_CHANGE`; sift-down emits its heapify and swap events. Event `nodeId` and
+  `otherId` for heap operations are zero-based array indexes.
+- The GUI requests one extraction at a time and waits for its event playback before allowing
+  the next. Completion occurs when only the final sorted value remains active.
+
 ## Public model interface to finalize
 
 Before the GUI calls model operations, Yusha records exact class names,

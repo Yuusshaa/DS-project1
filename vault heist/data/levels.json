@@ -189,8 +189,11 @@
       "number": 3,
       "title": "Extract the Greatest",
       "concept": "extract max",
-      "objective": "Extract each maximum and restore the heap.",
-      "implemented": false
+      "objective": "Extract each maximum, restore the active heap, and fill the sorted region.",
+      "scenarioId": 6,
+      "optimalSteps": 7,
+      "alarmCapacity": 13,
+      "implemented": true
     },
     {
       "act": 4,
