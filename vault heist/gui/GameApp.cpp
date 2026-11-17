@@ -70,6 +70,9 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     avlPredictionInsertValues[4] = 60;
     avlPredictionCorrectCount = 0;
     avlPredictionOptimalSteps = 5;
+    orderStatisticNodeId = -1;
+    orderStatisticK = 5;
+    orderStatisticRank = -1;
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
     heightOptimalSteps = 0;
@@ -103,6 +106,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     reconstructionChallenge = false;
     avlPredictionChallenge = false;
     avlPredictionWaiting = false;
+    orderStatisticChallenge = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
@@ -155,6 +159,7 @@ void GameApp::runAction(int action, int value, int secondValue) {
     reconstructionChallenge = false;
     avlPredictionChallenge = false;
     avlPredictionWaiting = false;
+    orderStatisticChallenge = false;
     selectedHeapIndex = -1;
     if (action == 0) {
         heapBuildSwaps = 0;
@@ -201,6 +206,44 @@ void GameApp::runAction(int action, int value, int secondValue) {
     highlightedNodeId = -1;
     eventTimer = 0.0f;
     refreshView();
+}
+
+void GameApp::startOrderStatisticChallenge() {
+    orderStatisticChallenge = true;
+    challengeActive = true;
+    challengeFinished = false;
+    orderStatisticK = 5;
+    orderStatisticNodeId = -1;
+    orderStatisticRank = -1;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    alarmCapacity = 10;
+    events.clear();
+    EventLog answer;
+    if (!model.performAction(ACTION_KTH, orderStatisticK, 0, answer)) {
+        orderStatisticChallenge = false;
+        challengeActive = false;
+        message = model.statusText();
+        return;
+    }
+    for (int i = 0; i < answer.size(); i++) {
+        if (answer.get(i).type == EV_DONE) orderStatisticNodeId = answer.get(i).nodeId;
+        events.add(answer.get(i));
+    }
+    if (orderStatisticNodeId < 0) {
+        orderStatisticChallenge = false;
+        challengeActive = false;
+        message = "The model did not return the requested order statistic.";
+        return;
+    }
+    currentEvent = -1;
+    nextEvent = 0;
+    alarmSteps = events.countAlarmSteps();
+    animationPlaying = true;
+    highlightedNodeId = -1;
+    message = "Find the 5th smallest key. Each node shows its subtree size.";
 }
 
 void GameApp::loadCurrentLevel() {
@@ -1733,6 +1776,50 @@ void GameApp::handleNodeClick(int id) {
         return;
     }
 
+    if (orderStatisticChallenge) {
+        alarmSteps++;
+        if (id == orderStatisticNodeId) {
+            int index = findNodeIndex(id);
+            int key = index >= 0 ? view.treeNodes[index].value : 0;
+            EventLog rankEvents;
+            if (!model.performAction(ACTION_RANK, key, 0, rankEvents)) {
+                message = model.statusText();
+                return;
+            }
+            Event selected;
+            selected.type = EV_VISIT;
+            selected.nodeId = id;
+            selected.value = key;
+            events.add(selected);
+            for (int i = 0; i < rankEvents.size(); i++) {
+                if (rankEvents.get(i).type == EV_DONE) orderStatisticRank = rankEvents.get(i).value;
+                events.add(rankEvents.get(i));
+            }
+            alarmSteps += 1 + rankEvents.countAlarmSteps();
+            challengeFinished = true;
+            challengeActive = false;
+            stars = alarmSteps <= 7 ? 3 : alarmSteps <= 9 ? 2 : 1;
+            score = stars * 100 + (wrongClicks == 0 ? 150 : 0);
+            message = "Correct! Rank of " + std::to_string(key) + " is " + std::to_string(orderStatisticRank) + " (zero-based).";
+            levelManager.recordResult(currentLevelIndex, stars, score);
+            levelManager.saveProgress("campaign_progress.dat");
+            screenState = 3;
+        }
+        else {
+            wrongClicks++;
+            if (alarmSteps >= alarmCapacity) {
+                challengeFinished = true;
+                challengeActive = false;
+                stars = 0;
+                score = 0;
+                message = "Alarm triggered. Reset and use left-subtree sizes to count ranks.";
+                screenState = 3;
+            }
+            else message = "Wrong room. Count left subtree size + 1 before moving right.";
+        }
+        return;
+    }
+
     if (heightChallenge) {
         handleHeightClick(id);
         return;
@@ -2372,6 +2459,20 @@ void GameApp::processInput() {
     bool isMirrorLevel = isLevel(1, 5);
     bool isRotationLevel = isLevel(3, 2) || isLevel(3, 3);
     bool isAvlPredictionLevel = isLevel(3, 4);
+    bool isOrderStatisticLevel = isLevel(3, 5);
+    if (isOrderStatisticLevel) {
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) startOrderStatisticChallenge();
+        else if (CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) runAction(0, 0, 0);
+        else if (orderStatisticChallenge) {
+            for (int i = 0; i < positions.size(); i++) {
+                if (CheckCollisionPointCircle(mouse, Vector2{ positions[i].x, positions[i].y }, 31.0f)) {
+                    handleNodeClick(positions[i].id);
+                    return;
+                }
+            }
+        }
+        return;
+    }
     if (isAvlPredictionLevel) {
         if (CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
             startAvlPredictionChallenge();
@@ -3025,6 +3126,7 @@ void GameApp::drawResultScreen() {
 }
 
 void GameApp::drawControls() {
+    bool isOrderStatisticLevel = isLevel(3, 5);
     bool isSearchLevel = currentLevelIndex >= 0 && currentLevelIndex < levelManager.count() &&
         levelManager.getLevel(currentLevelIndex).act == 2 &&
         (levelManager.getLevel(currentLevelIndex).number == 1 ||
@@ -3047,7 +3149,15 @@ void GameApp::drawControls() {
     bool isRotationSingle = isLevel(3, 2);
     bool isRotationDouble = isLevel(3, 3);
     bool isRotationLevel = isRotationSingle || isRotationDouble;
-    if (isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel || isBalanceLevel || isHeightLevel || isLcaLevel || isMirrorLevel || isRotationLevel) {
+    if (isOrderStatisticLevel) {
+        DrawText("ACT 3.5 - ORDER STATISTICS", 24, 55, 16, Color{ 150, 175, 205, 255 });
+        drawButton(Rectangle{ 20, 82, 220, 42 }, "Find 5th smallest", true);
+        drawButton(Rectangle{ 20, 132, 220, 42 }, "Reset level", true);
+        DrawText("Click the 5th smallest", 24, 190, 14, Color{ 205, 212, 224, 255 });
+        DrawText("Subtree sizes appear", 24, 210, 14, Color{ 205, 212, 224, 255 });
+        DrawText("below each room.", 24, 230, 14, Color{ 205, 212, 224, 255 });
+    }
+    else if (isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel || isBalanceLevel || isHeightLevel || isLcaLevel || isMirrorLevel || isRotationLevel) {
         LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
         bool degenerationLevel = levelManager.getLevel(currentLevelIndex).number == 5;
         const char* heading = isSearchLevel
@@ -3270,6 +3380,10 @@ void GameApp::drawTree() {
         std::string label = std::to_string(node.value);
         DrawText(label.c_str(), (int)positions[p].x - 15,
             (int)positions[p].y - 9, 18, Color{ 255, 255, 255, 255 });
+        if (isLevel(3, 5)) {
+            DrawText(TextFormat("S=%i", node.size), (int)positions[p].x - 14,
+                (int)positions[p].y + 34, 15, Color{ 240, 220, 170, 255 });
+        }
         if (heightChallenge) {
             int entered = enteredHeightFor(node.id);
             if (entered >= 0) {

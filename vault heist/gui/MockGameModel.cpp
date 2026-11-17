@@ -320,6 +320,27 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         return true;
     }
 
+    if (scenarioId == 40) {
+        int fixture[7][5] = {
+            { 1, 50, 2, 3, -1 }, { 2, 30, 4, 5, 1 },
+            { 3, 70, 6, 7, 1 }, { 4, 20, -1, -1, 2 },
+            { 5, 40, -1, -1, 2 }, { 6, 60, -1, -1, 3 },
+            { 7, 80, -1, -1, 3 }
+        };
+        for (int i = 0; i < 7; i++) {
+            ViewNode node;
+            node.id = fixture[i][0]; node.value = fixture[i][1];
+            node.leftId = fixture[i][2]; node.rightId = fixture[i][3];
+            node.parentId = fixture[i][4];
+            view.treeNodes.push(node);
+        }
+        view.viewType = MODEL_VIEW_TREE;
+        refreshMetadata();
+        message = "Order-statistic AVL fixture loaded";
+        events.clear();
+        return true;
+    }
+
     if (scenarioId == 4) {
         int values[8] = { 3, 9, 2, 1, 4, 5, 8, 7 };
         view.viewType = MODEL_VIEW_HEAP;
@@ -604,6 +625,86 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
 
     if (action == ACTION_INSERT && avlMode) {
         return performAvlInsert(value, events);
+    }
+
+    if (action == ACTION_KTH || action == ACTION_RANK) {
+        if (view.treeNodes.size() == 0) {
+            message = "No tree is loaded";
+            return false;
+        }
+        int resultId = -1;
+        int resultRank = 0;
+        if (action == ACTION_KTH) {
+            if (value < 1 || value > view.treeNodes[findRootId() >= 0 ? findNodeIndex(findRootId()) : 0].size) {
+                message = "k is outside the tree's order-statistic range";
+                return false;
+            }
+            int current = findRootId();
+            int k = value;
+            while (current >= 0) {
+                int index = findNodeIndex(current);
+                if (index < 0) break;
+                int leftSize = 0;
+                int leftIndex = findNodeIndex(view.treeNodes[index].leftId);
+                if (leftIndex >= 0) leftSize = view.treeNodes[leftIndex].size;
+                Event visit;
+                visit.type = EV_VISIT;
+                visit.nodeId = current;
+                visit.value = view.treeNodes[index].value;
+                events.add(visit);
+                if (k == leftSize + 1) {
+                    resultId = current;
+                    break;
+                }
+                if (k <= leftSize) current = view.treeNodes[index].leftId;
+                else {
+                    k -= leftSize + 1;
+                    current = view.treeNodes[index].rightId;
+                }
+            }
+        }
+        else {
+            int current = findRootId();
+            while (current >= 0) {
+                int index = findNodeIndex(current);
+                if (index < 0) break;
+                Event compare;
+                compare.type = EV_COMPARE;
+                compare.nodeId = current;
+                compare.value = value;
+                if (value == view.treeNodes[index].value) {
+                    compare.code = CMP_EQUAL;
+                    int leftIndex = findNodeIndex(view.treeNodes[index].leftId);
+                    resultRank += leftIndex >= 0 ? view.treeNodes[leftIndex].size : 0;
+                    events.add(compare);
+                    resultId = current;
+                    break;
+                }
+                if (value < view.treeNodes[index].value) {
+                    compare.code = CMP_GREATER;
+                    current = view.treeNodes[index].leftId;
+                }
+                else {
+                    compare.code = CMP_LESS;
+                    int leftIndex = findNodeIndex(view.treeNodes[index].leftId);
+                    resultRank += (leftIndex >= 0 ? view.treeNodes[leftIndex].size : 0) + 1;
+                    current = view.treeNodes[index].rightId;
+                }
+                events.add(compare);
+            }
+        }
+        if (action == ACTION_RANK && resultId < 0) {
+            message = "Key not found for rank query";
+            return false;
+        }
+        Event done;
+        done.type = EV_DONE;
+        done.nodeId = resultId;
+        done.value = action == ACTION_KTH ? value : resultRank;
+        events.add(done);
+        message = action == ACTION_KTH
+            ? "Mock kth-smallest query complete" : "Mock zero-based rank query complete";
+        return true;
     }
 
     if (action == ACTION_TRAVERSE_PREORDER) {

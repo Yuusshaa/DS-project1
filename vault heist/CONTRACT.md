@@ -115,6 +115,20 @@ default value from `Event`.
 - Mock scenarios 39, 35, 36, 37, and 38 are the no-rotation, LL, RR, LR, and RL predictions.
 - Yusha's real facade must expose these scenarios and AVL insert behavior before integration.
 
+## Act 3.5 order statistics
+
+- Scenario 40 contains a seven-key balanced search tree with correct subtree sizes.
+- `ACTION_KTH` (20) takes a one-based `k` in `value` and returns the node ID in
+  `EV_DONE.nodeId`; `EV_DONE.value` echoes `k`. Its `EV_VISIT` events show the
+  search path using subtree sizes.
+- `ACTION_RANK` (21) takes a key in `value` and returns its zero-based rank
+  (number of keys strictly smaller) in `EV_DONE.value`; `EV_DONE.nodeId` is the
+  matching node ID. Its `EV_COMPARE` events show the search path.
+- The level asks the player to click the node returned by `kth(5)`; after a
+  correct answer the GUI queries `rank(key)` and displays that result.
+- The GUI displays each node's subtree size from `ModelView.size`. Yusha's model
+  must expose scenario 40 and actions 20/21 with these result meanings.
+
 ## Act 4.1 manual max-heap construction
 
 - Scenario 4 loads the eight-value heap puzzle `{3, 9, 2, 1, 4, 5, 8, 7}`.

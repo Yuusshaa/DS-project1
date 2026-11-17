@@ -104,6 +104,9 @@ private:
     int avlPredictionInsertValues[5];
     int avlPredictionCorrectCount;
     int avlPredictionOptimalSteps;
+    int orderStatisticNodeId;
+    int orderStatisticK;
+    int orderStatisticRank;
     int heightOptimalSteps;         // Act 1.3: rooms + 1 diameter report
     int expectedDeleteCase;
     int rangeLow;
@@ -136,6 +139,7 @@ private:
     bool reconstructionChallenge;
     bool avlPredictionChallenge;
     bool avlPredictionWaiting;
+    bool orderStatisticChallenge;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
@@ -188,6 +192,7 @@ private:
     bool prepareAvlPredictionStage();
     void chooseAvlPrediction(int predictedCase);
     void finishAvlPredictionChallenge(bool success);
+    void startOrderStatisticChallenge();
     int enteredHeightFor(int id);
     bool isLevel(int act, int number);
     void drawHeightPanel();

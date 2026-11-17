@@ -163,8 +163,11 @@
       "number": 5,
       "title": "Order Statistic Heist",
       "concept": "subtree size, kth, rank",
-      "objective": "Find the requested order statistic.",
-      "implemented": false
+      "objective": "Use subtree sizes to find the 5th smallest key; the model reports its zero-based rank.",
+      "scenarioId": 40,
+      "optimalSteps": 7,
+      "alarmCapacity": 10,
+      "implemented": true
     },
 
     {
