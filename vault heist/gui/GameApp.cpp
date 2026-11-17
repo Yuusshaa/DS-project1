@@ -39,6 +39,9 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     rotationExpectedPivots[0] = -1;
     rotationExpectedPivots[1] = -1;
     rotationOptimalSteps = 0;
+    selectedHeapIndex = -1;
+    heapBuildSwaps = 0;
+    heapBuildOptimalSteps = 4;
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
     heightOptimalSteps = 0;
@@ -61,6 +64,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     heightChallenge = false;
     lcaChallenge = false;
     rotationChallenge = false;
+    heapBuildChallenge = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
@@ -100,6 +104,8 @@ void GameApp::runAction(int action, int value, int secondValue) {
     heightChallenge = false;
     lcaChallenge = false;
     rotationChallenge = false;
+    heapBuildChallenge = false;
+    selectedHeapIndex = -1;
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
     heightPhase = 0;
@@ -976,6 +982,57 @@ void GameApp::finishRotationChallenge(bool success) {
     screenState = 3;
 }
 
+void GameApp::startHeapBuildChallenge() {
+    if (!isLevel(4, 1)) return;
+    LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
+    EventLog setup;
+    if (!model.loadScenario(level.scenarioId, setup)) {
+        message = model.statusText();
+        return;
+    }
+    refreshView();
+    events.clear();
+    currentEvent = -1;
+    nextEvent = 0;
+    selectedHeapIndex = -1;
+    heapBuildSwaps = 0;
+    heapBuildOptimalSteps = level.optimalSteps > 0 ? level.optimalSteps : 4;
+    alarmCapacity = level.alarmCapacity > 0 ? level.alarmCapacity :
+        (3 * heapBuildOptimalSteps + 1) / 2 + 2;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    heapBuildChallenge = true;
+    challengeActive = true;
+    challengeFinished = false;
+    animationPlaying = false;
+    message = "Select a parent cell, then its larger child. Build the max heap.";
+}
+
+void GameApp::finishHeapBuildChallenge(bool success) {
+    heapBuildChallenge = false;
+    challengeActive = false;
+    challengeFinished = true;
+    selectedHeapIndex = -1;
+    if (success && alarmSteps < alarmCapacity) {
+        if (wrongClicks == 0 && alarmSteps <= heapBuildOptimalSteps) stars = 3;
+        else if (wrongClicks <= 1 && alarmSteps * 4 <= heapBuildOptimalSteps * 5) stars = 2;
+        else stars = 1;
+        score = 1000 - 10 * alarmSteps - 50 * wrongClicks;
+        if (score < 0) score = 0;
+        message = "Max heap built. The largest key is at the root.";
+    }
+    else {
+        stars = 0;
+        score = 0;
+        message = "Alarm full. Heap construction failed - retry.";
+    }
+    levelManager.recordResult(currentLevelIndex, stars, score);
+    levelManager.saveProgress("campaign_progress.dat");
+    screenState = 3;
+}
+
 void GameApp::handleHeightClick(int id) {
     if (heightPhase != 1) {
         message = "All heights are in. Type the diameter and press Enter.";
@@ -1696,6 +1753,73 @@ void GameApp::processInput() {
     bool isLcaLevel = isLevel(1, 4);
     bool isMirrorLevel = isLevel(1, 5);
     bool isRotationLevel = isLevel(3, 2) || isLevel(3, 3);
+    bool isHeapBuildLevel = isLevel(4, 1);
+    if (isHeapBuildLevel) {
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
+            startHeapBuildChallenge();
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
+            runAction(0, 0, 0);
+            return;
+        }
+        if (heapBuildChallenge && mouse.y >= 665 && mouse.y <= 713) {
+            int cellWidth = 72;
+            int gap = 8;
+            int activeSize = view.heapSize;
+            if (activeSize < 0) activeSize = 0;
+            if (activeSize > view.heapValues.size()) activeSize = view.heapValues.size();
+            if (activeSize > 0 && activeSize * (cellWidth + gap) > windowWidth - 320) {
+                cellWidth = (windowWidth - 320) / activeSize - gap;
+                if (cellWidth < 30) cellWidth = 30;
+            }
+            int index = ((int)mouse.x - 290) / (cellWidth + gap);
+            int cellX = 290 + index * (cellWidth + gap);
+            if (index >= 0 && index < activeSize && mouse.x >= cellX && mouse.x <= cellX + cellWidth) {
+                if (selectedHeapIndex < 0) {
+                    selectedHeapIndex = index;
+                    message = "Choose a child cell to swap with this parent.";
+                }
+                else if (selectedHeapIndex == index) {
+                    selectedHeapIndex = -1;
+                }
+                else {
+                    int first = selectedHeapIndex;
+                    selectedHeapIndex = -1;
+                    EventLog swapEvents;
+                    bool swapped = model.performAction(ACTION_HEAP_SWAP, first, index, swapEvents);
+                    if (!swapped) {
+                        alarmSteps++;
+                        wrongClicks++;
+                        message = "Invalid swap (+1 alarm). Choose a parent and its larger child.";
+                        if (alarmSteps >= alarmCapacity) finishHeapBuildChallenge(false);
+                        return;
+                    }
+                    heapBuildSwaps++;
+                    alarmSteps++;
+                    for (int i = 0; i < swapEvents.size(); i++) events.add(swapEvents.get(i));
+                    refreshView();
+                    currentEvent = events.size() - 1;
+                    nextEvent = events.size();
+                    EventLog checkEvents;
+                    model.performAction(ACTION_IS_MAX_HEAP, 0, 0, checkEvents);
+                    bool complete = false;
+                    for (int i = 0; i < checkEvents.size(); i++) {
+                        if (checkEvents.get(i).type == EV_DONE && checkEvents.get(i).value == 1) {
+                            complete = true;
+                        }
+                    }
+                    if (complete) {
+                        for (int j = 0; j < checkEvents.size(); j++) events.add(checkEvents.get(j));
+                        finishHeapBuildChallenge(true);
+                    }
+                    else message = "Valid swap. Continue until every parent dominates its children.";
+                }
+                return;
+            }
+        }
+        return;
+    }
     if (isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
         int target = levelManager.getLevel(currentLevelIndex).targetValue;
         startSearchChallenge(target);
@@ -1893,6 +2017,7 @@ void GameApp::draw() {
     DrawLine(260, 80, 260, windowHeight - 24, Color{ 62, 76, 96, 255 });
 
     if (view.viewType == MODEL_VIEW_HEAP) {
+        drawHeapControls();
         drawHeapView();
     }
     else {
@@ -2399,7 +2524,7 @@ void GameApp::drawHeapView() {
         bool swapPartner = currentEvent >= 0 && currentEvent < events.size() &&
             events.get(currentEvent).type == EV_HEAP_SWAP &&
             i == events.get(currentEvent).otherId;
-        bool selected = i == highlightedNodeId || swapPartner;
+        bool selected = i == highlightedNodeId || i == selectedHeapIndex || swapPartner;
 
         if (i > 0) {
             int parent = (i - 1) / 2;
@@ -2437,7 +2562,7 @@ void GameApp::drawHeapView() {
     for (int i = 0; i < view.heapValues.size(); i++) {
         int x = 290 + i * (cellWidth + gap);
         bool active = i < activeSize;
-        bool selected = i == highlightedNodeId ||
+        bool selected = i == highlightedNodeId || i == selectedHeapIndex ||
             (currentEvent >= 0 && currentEvent < events.size() &&
                 events.get(currentEvent).type == EV_HEAP_SWAP &&
                 i == events.get(currentEvent).otherId);
@@ -2451,6 +2576,26 @@ void GameApp::drawHeapView() {
         DrawText(TextFormat("%i", i), x + 8, 695, 12,
             Color{ 150, 165, 185, 255 });
     }
+}
+
+void GameApp::drawHeapControls() {
+    DrawText("ACT 4.1 - MAX HEAP BUILD", 24, 55, 15, Color{ 150, 175, 205, 255 });
+    drawButton(Rectangle{ 20, 82, 220, 42 }, "Start heap build", true);
+    drawButton(Rectangle{ 20, 132, 220, 42 }, "Reset level", true);
+    DrawText("Select parent, then larger child.", 20, 190, 13,
+        Color{ 205, 212, 224, 255 });
+    DrawText(TextFormat("Swaps: %i / %i", heapBuildSwaps, heapBuildOptimalSteps),
+        20, 220, 15, Color{ 205, 212, 224, 255 });
+    DrawText("ALARM", 24, 405, 15, Color{ 150, 175, 205, 255 });
+    int capacity = alarmCapacity > 0 ? alarmCapacity : 10;
+    int alarm = alarmSteps > capacity ? capacity : alarmSteps;
+    DrawRectangle(24, 430, 210, 14, Color{ 58, 66, 78, 255 });
+    DrawRectangle(24, 430, 210 * alarm / capacity, 14,
+        Color{ 216, 117, 73, 255 });
+    DrawText(TextFormat("%i / %i steps", alarmSteps, capacity), 24, 451, 15,
+        Color{ 205, 212, 224, 255 });
+    DrawText(TextFormat("Wrong swaps: %i", wrongClicks), 24, 478, 15,
+        Color{ 205, 212, 224, 255 });
 }
 
 void GameApp::drawEventLog() {

@@ -76,6 +76,9 @@ private:
     int rotationExpectedActions[2];
     int rotationExpectedPivots[2];
     int rotationOptimalSteps;
+    int selectedHeapIndex;
+    int heapBuildSwaps;
+    int heapBuildOptimalSteps;
     int heightOptimalSteps;         // Act 1.3: rooms + 1 diameter report
     int expectedDeleteCase;
     int rangeLow;
@@ -97,6 +100,7 @@ private:
     bool lcaChallenge;
     bool mirrorAnimationActive;
     bool rotationChallenge;
+    bool heapBuildChallenge;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
@@ -130,6 +134,8 @@ private:
     bool prepareRotationStage();
     void selectRotationAction(int action);
     void finishRotationChallenge(bool success);
+    void startHeapBuildChallenge();
+    void finishHeapBuildChallenge(bool success);
     int enteredHeightFor(int id);
     bool isLevel(int act, int number);
     void drawHeightPanel();
@@ -150,6 +156,7 @@ private:
     void drawPlaybackControls();
     void drawSandbox();
     void drawHeapView();
+    void drawHeapControls();
     void executeSandboxAction(int action);
     void restartPlayback();
     void stepPlayback(int direction);

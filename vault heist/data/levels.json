@@ -166,8 +166,11 @@
       "number": 1,
       "title": "Activate the Vault",
       "concept": "Max Heap construction",
-      "objective": "Build a valid Max Heap.",
-      "implemented": false
+      "objective": "Build a max heap by swapping a parent only with its larger child.",
+      "scenarioId": 4,
+      "optimalSteps": 4,
+      "alarmCapacity": 8,
+      "implemented": true
     },
     {
       "act": 4,

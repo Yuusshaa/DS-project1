@@ -95,6 +95,18 @@ default value from `Event`.
 - Mock fixtures 31-34 represent LL, RR, LR, and RL cases respectively. Yusha's real model must
   expose these same actions and fixtures before these levels can use the real model.
 
+## Act 4.1 manual max-heap construction
+
+- Scenario 4 loads the eight-value heap puzzle `{3, 9, 2, 1, 4, 5, 8, 7}`.
+- `ACTION_HEAP_SWAP` (22) takes a parent array index in `value` and a child index in
+  `secondValue`. It accepts only a direct parent-child pair where the child value is larger;
+  success emits `EV_HEAP_SWAP` with the two indices in `nodeId` and `otherId`.
+- `ACTION_IS_MAX_HEAP` (23) emits `EV_DONE` with `value = 1` when the active heap satisfies
+  the max-heap property, or `0` otherwise. A false result means the puzzle is not complete,
+  not that the query operation failed.
+- The GUI handles selection and scoring; the model owns validation and all heap-value changes.
+- Yusha's real facade must dispatch actions 22 and 23 and load scenario 4 before integration.
+
 ## Public model interface to finalize
 
 Before the GUI calls model operations, Yusha records exact class names,

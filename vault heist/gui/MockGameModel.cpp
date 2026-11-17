@@ -155,6 +155,16 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         return true;
     }
 
+    if (scenarioId == 4) {
+        int values[8] = { 3, 9, 2, 1, 4, 5, 8, 7 };
+        view.viewType = MODEL_VIEW_HEAP;
+        view.heapSize = 8;
+        for (int i = 0; i < 8; i++) view.heapValues.push(values[i]);
+        message = "Heap construction puzzle loaded";
+        events.clear();
+        return true;
+    }
+
     if (scenarioId == 31) {
         ViewNode node;
         node.id = 1; node.value = 50; node.leftId = 2; node.rightId = 3;
@@ -646,6 +656,45 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
         events.add(rotated);
         refreshMetadata();
         message = "Mock primitive rotation complete";
+    }
+    else if (action == ACTION_HEAP_SWAP) {
+        int parent = value;
+        int child = secondValue;
+        int activeSize = view.heapSize;
+        bool adjacent = child > 0 && (child - 1) / 2 == parent;
+        if (parent < 0 || child < 0 || parent >= activeSize || child >= activeSize ||
+            !adjacent || view.heapValues[child] <= view.heapValues[parent]) {
+            message = "Heap swap rejected: select a parent and a strictly larger child";
+            return false;
+        }
+        int temp = view.heapValues[parent];
+        view.heapValues[parent] = view.heapValues[child];
+        view.heapValues[child] = temp;
+        Event swapped;
+        swapped.type = EV_HEAP_SWAP;
+        swapped.nodeId = parent;
+        swapped.otherId = child;
+        swapped.value = view.heapValues[parent];
+        swapped.code = 0;
+        events.add(swapped);
+        message = "Valid parent-child swap";
+    }
+    else if (action == ACTION_IS_MAX_HEAP) {
+        bool valid = true;
+        for (int child = 1; child < view.heapSize; child++) {
+            int parent = (child - 1) / 2;
+            if (view.heapValues[parent] < view.heapValues[child]) {
+                valid = false;
+                break;
+            }
+        }
+        Event result;
+        result.type = EV_DONE;
+        result.value = valid ? 1 : 0;
+        result.code = 0;
+        events.add(result);
+        message = valid ? "Max heap property verified" : "Heap property is not complete";
+        return valid;
     }
     else {
         message = "This mock action is not wired yet";
