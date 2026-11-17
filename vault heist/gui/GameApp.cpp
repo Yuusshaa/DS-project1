@@ -57,6 +57,19 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     reconstructionDragValue = -1;
     reconstructionDragSourceSlot = -1;
     reconstructionOptimalSteps = 13;
+    avlPredictionStage = 0;
+    avlPredictionExpected[0] = ROT_NONE;
+    avlPredictionExpected[1] = ROT_LL;
+    avlPredictionExpected[2] = ROT_RR;
+    avlPredictionExpected[3] = ROT_LR;
+    avlPredictionExpected[4] = ROT_RL;
+    avlPredictionInsertValues[0] = 60;
+    avlPredictionInsertValues[1] = 20;
+    avlPredictionInsertValues[2] = 60;
+    avlPredictionInsertValues[3] = 40;
+    avlPredictionInsertValues[4] = 60;
+    avlPredictionCorrectCount = 0;
+    avlPredictionOptimalSteps = 5;
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
     heightOptimalSteps = 0;
@@ -88,6 +101,8 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     heapRaceChallenge = false;
     heapRaceWaiting = false;
     reconstructionChallenge = false;
+    avlPredictionChallenge = false;
+    avlPredictionWaiting = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
@@ -138,6 +153,8 @@ void GameApp::runAction(int action, int value, int secondValue) {
     heapRaceChallenge = false;
     heapRaceWaiting = false;
     reconstructionChallenge = false;
+    avlPredictionChallenge = false;
+    avlPredictionWaiting = false;
     selectedHeapIndex = -1;
     if (action == 0) {
         heapBuildSwaps = 0;
@@ -151,6 +168,8 @@ void GameApp::runAction(int action, int value, int secondValue) {
         reconstructionNodeCount = 0;
         reconstructionDragValue = -1;
         reconstructionDragSourceSlot = -1;
+        avlPredictionStage = 0;
+        avlPredictionCorrectCount = 0;
     }
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
@@ -1435,6 +1454,111 @@ bool GameApp::reconstructionTokenIsPlaced(int value) {
     return false;
 }
 
+void GameApp::startAvlPredictionChallenge() {
+    if (!isLevel(3, 4)) return;
+    avlPredictionStage = 0;
+    avlPredictionCorrectCount = 0;
+    avlPredictionExpected[0] = ROT_NONE;
+    avlPredictionExpected[1] = ROT_LL;
+    avlPredictionExpected[2] = ROT_RR;
+    avlPredictionExpected[3] = ROT_LR;
+    avlPredictionExpected[4] = ROT_RL;
+    avlPredictionInsertValues[0] = 60;
+    avlPredictionInsertValues[1] = 20;
+    avlPredictionInsertValues[2] = 60;
+    avlPredictionInsertValues[3] = 40;
+    avlPredictionInsertValues[4] = 60;
+    avlPredictionOptimalSteps = 5;
+    LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
+    alarmCapacity = level.alarmCapacity > 0 ? level.alarmCapacity : 10;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    avlPredictionChallenge = true;
+    avlPredictionWaiting = false;
+    challengeActive = true;
+    challengeFinished = false;
+    animationPlaying = false;
+    if (!prepareAvlPredictionStage()) finishAvlPredictionChallenge(false);
+}
+
+bool GameApp::prepareAvlPredictionStage() {
+    if (avlPredictionStage < 0 || avlPredictionStage >= 5) return false;
+    int scenarioIds[5] = { 39, 35, 36, 37, 38 };
+    EventLog setup;
+    if (!model.loadScenario(scenarioIds[avlPredictionStage], setup)) {
+        message = model.statusText();
+        return false;
+    }
+    refreshView();
+    events.clear();
+    currentEvent = -1;
+    nextEvent = 0;
+    animationPlaying = false;
+    message = "Predict the AVL repair before inserting the shown key.";
+    return true;
+}
+
+void GameApp::chooseAvlPrediction(int predictedCase) {
+    if (!avlPredictionChallenge || avlPredictionWaiting ||
+        avlPredictionStage < 0 || avlPredictionStage >= 5) return;
+    if (predictedCase != avlPredictionExpected[avlPredictionStage]) {
+        alarmSteps++;
+        wrongClicks++;
+        message = "Wrong prediction (+1 alarm). The candidate key has not been inserted.";
+        if (alarmSteps >= alarmCapacity) finishAvlPredictionChallenge(false);
+        return;
+    }
+
+    if (!model.performAction(ACTION_INSERT,
+        avlPredictionInsertValues[avlPredictionStage], 0, events)) {
+        message = model.statusText();
+        return;
+    }
+    int observedCase = ROT_NONE;
+    for (int i = 0; i < events.size(); i++) {
+        if (events.get(i).type == EV_BALANCE_ALERT) observedCase = events.get(i).code;
+    }
+    if (observedCase != predictedCase) {
+        message = "Model event mismatch: insertion reported a different rotation case.";
+        finishAvlPredictionChallenge(false);
+        return;
+    }
+    avlPredictionCorrectCount++;
+    alarmSteps++;
+    refreshView();
+    currentEvent = -1;
+    nextEvent = 0;
+    eventTimer = 0.0f;
+    animationPlaying = true;
+    avlPredictionWaiting = true;
+    message = "Prediction accepted. Watch the AVL insertion and repair events.";
+}
+
+void GameApp::finishAvlPredictionChallenge(bool success) {
+    avlPredictionChallenge = false;
+    avlPredictionWaiting = false;
+    challengeActive = false;
+    challengeFinished = true;
+    if (success && alarmSteps < alarmCapacity) {
+        if (wrongClicks == 0 && alarmSteps <= avlPredictionOptimalSteps) stars = 3;
+        else if (wrongClicks <= 1 && alarmSteps * 4 <= avlPredictionOptimalSteps * 5) stars = 2;
+        else stars = 1;
+        score = 1000 - 10 * alarmSteps - 50 * wrongClicks;
+        if (score < 0) score = 0;
+        message = "All five AVL insertion predictions were resolved.";
+    }
+    else {
+        stars = 0;
+        score = 0;
+        message = "Alarm full. The AVL prediction level failed - retry.";
+    }
+    levelManager.recordResult(currentLevelIndex, stars, score);
+    levelManager.saveProgress("campaign_progress.dat");
+    screenState = 3;
+}
+
 void GameApp::handleReconstructionInput() {
     Vector2 mouse = GetMousePosition();
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -2247,6 +2371,40 @@ void GameApp::processInput() {
     bool isLcaLevel = isLevel(1, 4);
     bool isMirrorLevel = isLevel(1, 5);
     bool isRotationLevel = isLevel(3, 2) || isLevel(3, 3);
+    bool isAvlPredictionLevel = isLevel(3, 4);
+    if (isAvlPredictionLevel) {
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
+            startAvlPredictionChallenge();
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
+            runAction(0, 0, 0);
+            return;
+        }
+        if (avlPredictionChallenge && !avlPredictionWaiting) {
+            if (CheckCollisionPointRec(mouse, Rectangle{ 20, 182, 220, 42 })) {
+                chooseAvlPrediction(ROT_NONE);
+                return;
+            }
+            if (CheckCollisionPointRec(mouse, Rectangle{ 20, 232, 220, 42 })) {
+                chooseAvlPrediction(ROT_LL);
+                return;
+            }
+            if (CheckCollisionPointRec(mouse, Rectangle{ 20, 282, 220, 42 })) {
+                chooseAvlPrediction(ROT_RR);
+                return;
+            }
+            if (CheckCollisionPointRec(mouse, Rectangle{ 20, 332, 220, 42 })) {
+                chooseAvlPrediction(ROT_LR);
+                return;
+            }
+            if (CheckCollisionPointRec(mouse, Rectangle{ 20, 382, 220, 42 })) {
+                chooseAvlPrediction(ROT_RL);
+                return;
+            }
+        }
+        return;
+    }
     bool isHeapBuildLevel = isLevel(4, 1);
     bool isHeapifyLevel = isLevel(4, 2);
     bool isHeapRaceLevel = isLevel(4, 4) || isLevel(4, 5);
@@ -2639,6 +2797,15 @@ void GameApp::update(float deltaTime) {
             }
             if (heapExtractWaiting) heapExtractWaiting = false;
             if (heapRaceWaiting) heapRaceWaiting = false;
+            if (avlPredictionWaiting) {
+                avlPredictionWaiting = false;
+                if (avlPredictionStage >= 4) finishAvlPredictionChallenge(true);
+                else {
+                    avlPredictionStage++;
+                    if (!prepareAvlPredictionStage()) finishAvlPredictionChallenge(false);
+                }
+                return;
+            }
         }
         eventTimer = 0.0f;
     }
@@ -2687,7 +2854,13 @@ void GameApp::draw() {
         drawHeapView();
     }
     else {
-        drawControls();
+        if (isLevel(3, 4)) drawAvlPredictionControls();
+        else drawControls();
+        if (isLevel(3, 4) && avlPredictionChallenge && avlPredictionStage >= 0 && avlPredictionStage < 5) {
+            DrawText(TextFormat("PREDICT BEFORE INSERT: %i",
+                avlPredictionInsertValues[avlPredictionStage]),
+                290, 112, 19, Color{ 240, 220, 170, 255 });
+        }
         drawTree();
     }
     drawEventLog();
@@ -3164,6 +3337,36 @@ void GameApp::drawTree() {
     }
 }
 
+void GameApp::drawAvlPredictionControls() {
+    DrawText("ACT 3.4 - AUTO BALANCE", 24, 55, 15, Color{ 150, 175, 205, 255 });
+    drawButton(Rectangle{ 20, 82, 220, 42 }, "Start prediction", true);
+    drawButton(Rectangle{ 20, 132, 220, 42 }, "Reset level", true);
+    bool enabled = avlPredictionChallenge && !avlPredictionWaiting;
+    drawButton(Rectangle{ 20, 182, 220, 42 }, "No rotation", enabled);
+    drawButton(Rectangle{ 20, 232, 220, 42 }, "LL rotation", enabled);
+    drawButton(Rectangle{ 20, 282, 220, 42 }, "RR rotation", enabled);
+    drawButton(Rectangle{ 20, 332, 220, 42 }, "LR rotation", enabled);
+    drawButton(Rectangle{ 20, 382, 220, 42 }, "RL rotation", enabled);
+    DrawText(TextFormat("Prediction: %i / 5", avlPredictionCorrectCount),
+        24, 442, 14, Color{ 205, 212, 224, 255 });
+    DrawText("ALARM", 24, 475, 15, Color{ 150, 175, 205, 255 });
+    int capacity = alarmCapacity > 0 ? alarmCapacity : 10;
+    int alarm = alarmSteps > capacity ? capacity : alarmSteps;
+    DrawRectangle(24, 500, 210, 14, Color{ 58, 66, 78, 255 });
+    DrawRectangle(24, 500, 210 * alarm / capacity, 14,
+        Color{ 216, 117, 73, 255 });
+    DrawText(TextFormat("%i / %i steps", alarmSteps, capacity), 24, 521, 14,
+        Color{ 205, 212, 224, 255 });
+    DrawText(TextFormat("Wrong predictions: %i", wrongClicks), 24, 546, 13,
+        Color{ 205, 212, 224, 255 });
+    if (!avlPredictionChallenge) {
+        DrawText("Predict the repair before", 285, 112, 18,
+            Color{ 240, 220, 170, 255 });
+        DrawText("each new key is inserted.", 285, 138, 18,
+            Color{ 205, 212, 224, 255 });
+    }
+}
+
 void GameApp::drawHeapView() {
     DrawText("MAX HEAP", 24, 55, 16, Color{ 150, 175, 205, 255 });
     DrawText(TextFormat("Active heap size: %i / %i", view.heapSize,
@@ -3494,7 +3697,11 @@ std::string GameApp::describeEvent(Event& event) {
         return "Rotate " + direction + " at node " + std::to_string(event.nodeId);
     }
     if (event.type == EV_BALANCE_ALERT) {
-        return "Unbalanced pivot selected: node " + std::to_string(event.nodeId);
+        std::string caseName = event.code == ROT_LL ? "LL" :
+            event.code == ROT_RR ? "RR" :
+            event.code == ROT_LR ? "LR" :
+            event.code == ROT_RL ? "RL" : "unknown";
+        return "AVL " + caseName + " case at node " + std::to_string(event.nodeId);
     }
     if (event.type == EV_DONE) {
         return "Action complete";
@@ -3517,6 +3724,10 @@ std::string GameApp::describeEvent(Event& event) {
     }
     if (event.type == EV_UPDATE_HEIGHT) {
         return "Height of node " + std::to_string(event.nodeId) + " = " +
+            std::to_string(event.newValue);
+    }
+    if (event.type == EV_UPDATE_SIZE) {
+        return "Subtree size of node " + std::to_string(event.nodeId) + " = " +
             std::to_string(event.newValue);
     }
     if (event.type == EV_HEAP_BUILD) return "Build max heap";

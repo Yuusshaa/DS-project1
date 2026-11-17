@@ -7,6 +7,7 @@ class MockGameModel : public GameModel {
 private:
     ModelView view;
     std::string message;
+    bool avlMode;
 
     int findNodeIndex(int id);
     int findRootId();
@@ -20,6 +21,7 @@ private:
     void removeNodeRecord(int id);
     void addVisit(int id, EventLog& events);
     void collectRange(int id, int low, int high, EventLog& events);
+    bool performAvlInsert(int value, EventLog& events);
 
 public:
     MockGameModel();

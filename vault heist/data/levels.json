@@ -152,8 +152,11 @@
       "number": 4,
       "title": "Auto Balance",
       "concept": "AVL insertion",
-      "objective": "Predict and observe automatic rebalancing.",
-      "implemented": false
+      "objective": "Predict whether each AVL insertion causes no rotation or an LL, RR, LR, or RL repair.",
+      "scenarioId": 39,
+      "optimalSteps": 5,
+      "alarmCapacity": 10,
+      "implemented": true
     },
     {
       "act": 3,

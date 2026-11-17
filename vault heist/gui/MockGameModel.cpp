@@ -2,6 +2,7 @@
 
 MockGameModel::MockGameModel() {
     message = "Mock model ready";
+    avlMode = false;
     EventLog initialEvents;
     loadScenario(1, initialEvents);
 }
@@ -134,6 +135,169 @@ void MockGameModel::collectRange(int id, int low, int high, EventLog& events) {
     }
 }
 
+bool MockGameModel::performAvlInsert(int value, EventLog& events) {
+    DynArray<int> oldHeights;
+    DynArray<int> oldSizes;
+    for (int i = 0; i < view.treeNodes.size(); i++) {
+        oldHeights.push(view.treeNodes[i].height);
+        oldSizes.push(view.treeNodes[i].size);
+    }
+
+    int currentId = findRootId();
+    int parentId = -1;
+    int side = SIDE_NONE;
+    while (currentId >= 0) {
+        int index = findNodeIndex(currentId);
+        if (index < 0) break;
+        Event compare;
+        compare.type = EV_COMPARE;
+        compare.nodeId = currentId;
+        compare.value = value;
+        if (value < view.treeNodes[index].value) compare.code = CMP_LESS;
+        else if (value > view.treeNodes[index].value) compare.code = CMP_GREATER;
+        else {
+            compare.code = CMP_EQUAL;
+            events.add(compare);
+            message = "Duplicate keys are rejected";
+            return false;
+        }
+        events.add(compare);
+        parentId = currentId;
+        if (compare.code == CMP_LESS) {
+            side = SIDE_LEFT;
+            currentId = view.treeNodes[index].leftId;
+        }
+        else {
+            side = SIDE_RIGHT;
+            currentId = view.treeNodes[index].rightId;
+        }
+    }
+
+    int newId = 1;
+    for (int i = 0; i < view.treeNodes.size(); i++) {
+        if (view.treeNodes[i].id >= newId) newId = view.treeNodes[i].id + 1;
+    }
+    ViewNode inserted;
+    inserted.id = newId;
+    inserted.value = value;
+    inserted.parentId = parentId;
+    int parentIndex = findNodeIndex(parentId);
+    if (parentIndex >= 0) {
+        if (side == SIDE_LEFT) view.treeNodes[parentIndex].leftId = newId;
+        else view.treeNodes[parentIndex].rightId = newId;
+    }
+    view.treeNodes.push(inserted);
+    Event insertedEvent;
+    insertedEvent.type = EV_INSERT;
+    insertedEvent.nodeId = newId;
+    insertedEvent.otherId = parentId;
+    insertedEvent.value = value;
+    insertedEvent.code = side;
+    events.add(insertedEvent);
+    refreshMetadata();
+
+    int ancestorId = parentId;
+    while (ancestorId >= 0) {
+        int ancestorIndex = findNodeIndex(ancestorId);
+        if (ancestorIndex < 0) break;
+        ViewNode& ancestor = view.treeNodes[ancestorIndex];
+        int leftIndex = findNodeIndex(ancestor.leftId);
+        int rightIndex = findNodeIndex(ancestor.rightId);
+        int leftHeight = leftIndex >= 0 ? view.treeNodes[leftIndex].height : 0;
+        int rightHeight = rightIndex >= 0 ? view.treeNodes[rightIndex].height : 0;
+        int balance = leftHeight - rightHeight;
+        int rotationCase = ROT_NONE;
+        int firstAction = 0;
+        int firstPivot = -1;
+        int secondAction = 0;
+        int secondPivot = -1;
+
+        if (balance > 1 && leftIndex >= 0) {
+            int childLeft = findNodeIndex(view.treeNodes[leftIndex].leftId);
+            int childRight = findNodeIndex(view.treeNodes[leftIndex].rightId);
+            int childBalance = (childLeft >= 0 ? view.treeNodes[childLeft].height : 0) -
+                (childRight >= 0 ? view.treeNodes[childRight].height : 0);
+            rotationCase = childBalance >= 0 ? ROT_LL : ROT_LR;
+            if (rotationCase == ROT_LL) {
+                firstAction = ACTION_ROTATE_RIGHT;
+                firstPivot = ancestorId;
+            }
+            else {
+                firstAction = ACTION_ROTATE_LEFT;
+                firstPivot = view.treeNodes[leftIndex].id;
+                secondAction = ACTION_ROTATE_RIGHT;
+                secondPivot = ancestorId;
+            }
+        }
+        else if (balance < -1 && rightIndex >= 0) {
+            int childLeft = findNodeIndex(view.treeNodes[rightIndex].leftId);
+            int childRight = findNodeIndex(view.treeNodes[rightIndex].rightId);
+            int childBalance = (childLeft >= 0 ? view.treeNodes[childLeft].height : 0) -
+                (childRight >= 0 ? view.treeNodes[childRight].height : 0);
+            rotationCase = childBalance <= 0 ? ROT_RR : ROT_RL;
+            if (rotationCase == ROT_RR) {
+                firstAction = ACTION_ROTATE_LEFT;
+                firstPivot = ancestorId;
+            }
+            else {
+                firstAction = ACTION_ROTATE_RIGHT;
+                firstPivot = view.treeNodes[rightIndex].id;
+                secondAction = ACTION_ROTATE_LEFT;
+                secondPivot = ancestorId;
+            }
+        }
+
+        if (rotationCase != ROT_NONE) {
+            Event alert;
+            alert.type = EV_BALANCE_ALERT;
+            alert.nodeId = ancestorId;
+            alert.value = balance;
+            alert.code = rotationCase;
+            events.add(alert);
+
+            EventLog rotationEvents;
+            if (!performAction(firstAction, firstPivot, 0, rotationEvents)) return false;
+            for (int i = 0; i < rotationEvents.size(); i++) {
+                if (rotationEvents.get(i).type != EV_DONE) events.add(rotationEvents.get(i));
+            }
+            if (secondAction != 0) {
+                rotationEvents.clear();
+                if (!performAction(secondAction, secondPivot, 0, rotationEvents)) return false;
+                for (int i = 0; i < rotationEvents.size(); i++) {
+                    if (rotationEvents.get(i).type != EV_DONE) events.add(rotationEvents.get(i));
+                }
+            }
+            break;
+        }
+        ancestorId = ancestor.parentId;
+    }
+
+    refreshMetadata();
+    for (int i = 0; i < view.treeNodes.size(); i++) {
+        Event heightEvent;
+        heightEvent.type = EV_UPDATE_HEIGHT;
+        heightEvent.nodeId = view.treeNodes[i].id;
+        heightEvent.oldValue = i < oldHeights.size() ? oldHeights[i] : 0;
+        heightEvent.newValue = view.treeNodes[i].height;
+        if (heightEvent.oldValue != heightEvent.newValue) events.add(heightEvent);
+        Event sizeEvent;
+        sizeEvent.type = EV_UPDATE_SIZE;
+        sizeEvent.nodeId = view.treeNodes[i].id;
+        sizeEvent.oldValue = i < oldSizes.size() ? oldSizes[i] : 0;
+        sizeEvent.newValue = view.treeNodes[i].size;
+        if (sizeEvent.oldValue != sizeEvent.newValue) events.add(sizeEvent);
+    }
+    Event done;
+    done.type = EV_DONE;
+    done.note[0] = 'A';
+    done.note[1] = 'V';
+    done.note[2] = 'L';
+    done.note[3] = '\0';
+    events.add(done);
+    message = "Mock AVL insertion and automatic rebalancing complete";
+    return true;
+}
+
 void MockGameModel::addVisit(int id, EventLog& events) {
     int index = findNodeIndex(id);
     if (index < 0) {
@@ -148,6 +312,7 @@ void MockGameModel::addVisit(int id, EventLog& events) {
 
 bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
     view.clear();
+    avlMode = false;
     if (scenarioId == 25) {
         view.viewType = MODEL_VIEW_TREE;
         message = "Empty BST loaded for the degeneration challenge";
@@ -315,6 +480,62 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         return true;
     }
 
+    if (scenarioId >= 35 && scenarioId <= 39) {
+        int rows[5][5];
+        int count = 0;
+        if (scenarioId == 35) {
+            int fixture[2][5] = {
+                {1, 50, 2, -1, -1}, {2, 30, -1, -1, 1}
+            };
+            count = 2;
+            for (int i = 0; i < count; i++) for (int j = 0; j < 5; j++) rows[i][j] = fixture[i][j];
+        }
+        else if (scenarioId == 36) {
+            int fixture[2][5] = {
+                {1, 30, -1, 2, -1}, {2, 50, -1, -1, 1}
+            };
+            count = 2;
+            for (int i = 0; i < count; i++) for (int j = 0; j < 5; j++) rows[i][j] = fixture[i][j];
+        }
+        else if (scenarioId == 37) {
+            int fixture[2][5] = {
+                {1, 50, 2, -1, -1}, {2, 30, -1, -1, 1}
+            };
+            count = 2;
+            for (int i = 0; i < count; i++) for (int j = 0; j < 5; j++) rows[i][j] = fixture[i][j];
+        }
+        else if (scenarioId == 38) {
+            int fixture[2][5] = {
+                {1, 50, -1, 2, -1}, {2, 70, -1, -1, 1}
+            };
+            count = 2;
+            for (int i = 0; i < count; i++) for (int j = 0; j < 5; j++) rows[i][j] = fixture[i][j];
+        }
+        else {
+            int fixture[3][5] = {
+                {1, 50, 2, 3, -1}, {2, 30, -1, -1, 1},
+                {3, 70, -1, -1, 1}
+            };
+            count = 3;
+            for (int i = 0; i < count; i++) for (int j = 0; j < 5; j++) rows[i][j] = fixture[i][j];
+        }
+        for (int i = 0; i < count; i++) {
+            ViewNode node;
+            node.id = rows[i][0];
+            node.value = rows[i][1];
+            node.leftId = rows[i][2];
+            node.rightId = rows[i][3];
+            node.parentId = rows[i][4];
+            view.treeNodes.push(node);
+        }
+        view.viewType = MODEL_VIEW_TREE;
+        refreshMetadata();
+        avlMode = true;
+        message = "Mock AVL insertion prediction fixture loaded";
+        events.clear();
+        return true;
+    }
+
     if (scenarioId == 13) {
         // Shared Act 1.3/1.4/1.5 fixture: root 50, height 4, diameter 6.
         // id, value, left, right, parent
@@ -380,6 +601,10 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
     EventLog& events) {
     (void)secondValue;
     events.clear();
+
+    if (action == ACTION_INSERT && avlMode) {
+        return performAvlInsert(value, events);
+    }
 
     if (action == ACTION_TRAVERSE_PREORDER) {
         traverseWalk(findRootId(), 0, events);

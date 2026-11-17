@@ -99,6 +99,11 @@ private:
     int reconstructionDragValue;
     int reconstructionDragSourceSlot;
     int reconstructionOptimalSteps;
+    int avlPredictionStage;
+    int avlPredictionExpected[5];
+    int avlPredictionInsertValues[5];
+    int avlPredictionCorrectCount;
+    int avlPredictionOptimalSteps;
     int heightOptimalSteps;         // Act 1.3: rooms + 1 diameter report
     int expectedDeleteCase;
     int rangeLow;
@@ -129,6 +134,8 @@ private:
     bool heapRaceChallenge;
     bool heapRaceWaiting;
     bool reconstructionChallenge;
+    bool avlPredictionChallenge;
+    bool avlPredictionWaiting;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
@@ -177,6 +184,10 @@ private:
     void finishReconstructionChallenge(bool success);
     void handleReconstructionInput();
     bool reconstructionTokenIsPlaced(int value);
+    void startAvlPredictionChallenge();
+    bool prepareAvlPredictionStage();
+    void chooseAvlPrediction(int predictedCase);
+    void finishAvlPredictionChallenge(bool success);
     int enteredHeightFor(int id);
     bool isLevel(int act, int number);
     void drawHeightPanel();
@@ -203,6 +214,7 @@ private:
     void drawHeapRaceControls();
     void drawHeapFinalControls();
     void drawReconstructionChallenge();
+    void drawAvlPredictionControls();
     void executeSandboxAction(int action);
     void restartPlayback();
     void stepPlayback(int direction);

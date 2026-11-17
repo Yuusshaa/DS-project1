@@ -105,6 +105,16 @@ default value from `Event`.
 - Mock fixtures 31-34 represent LL, RR, LR, and RL cases respectively. Yusha's real model must
   expose these same actions and fixtures before these levels can use the real model.
 
+## Act 3.4 AVL insertion prediction
+
+- Before each insertion, the GUI asks the player to predict no rotation or LL/RR/LR/RL.
+- `ACTION_INSERT` on AVL scenarios 35-39 must insert the key, rebalance automatically, and emit
+  `EV_BALANCE_ALERT` with the first unbalanced pivot in `nodeId` and rotation case in `code`,
+  followed by the primitive `EV_ROTATE` operations and height/size updates. No alert means no
+  rotation was required.
+- Mock scenarios 39, 35, 36, 37, and 38 are the no-rotation, LL, RR, LR, and RL predictions.
+- Yusha's real facade must expose these scenarios and AVL insert behavior before integration.
+
 ## Act 4.1 manual max-heap construction
 
 - Scenario 4 loads the eight-value heap puzzle `{3, 9, 2, 1, 4, 5, 8, 7}`.
