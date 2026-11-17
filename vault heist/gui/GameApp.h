@@ -41,6 +41,7 @@ private:
     std::string message;
     std::string sandboxValueInput;
     std::string sandboxSecondInput;
+    std::string sandboxSeedInput;
     std::string answerInput;        // Act 1.3: digits typed by the player
     std::string reconstructionFirstTraversal;
     std::string reconstructionSecondTraversal;
@@ -56,6 +57,9 @@ private:
     int expectedIndex;
     int searchTarget;
     int sandboxAction;
+    int sandboxStructureType; // 0=Binary Tree, 1=BST, 2=AVL, 3=Max Heap
+    int sandboxSeed;
+    int sandboxRandomState;
     int insertTarget;
     Event pendingInsertEvent;
     DynArray<Event> pendingDeleteEvents;
@@ -142,6 +146,7 @@ private:
     bool orderStatisticChallenge;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
+    bool sandboxSeedFieldFocused;
     float eventTimer;
     float mirrorAnimationTime;
     float heapRaceSecondsRemaining;
@@ -212,6 +217,10 @@ private:
     void drawEventLog();
     void drawPlaybackControls();
     void drawSandbox();
+    void selectSandboxStructure(int structureType);
+    void randomizeSandbox();
+    int nextSandboxRandom();
+    bool sandboxContainsKey(int key);
     void drawHeapView();
     void drawHeapControls();
     void drawHeapifyControls();

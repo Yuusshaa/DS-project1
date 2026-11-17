@@ -15,6 +15,9 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     expectedIndex = 0;
     searchTarget = 0;
     sandboxAction = ACTION_SEARCH;
+    sandboxStructureType = 1;
+    sandboxSeed = 1;
+    sandboxRandomState = 1;
     insertTarget = 0;
     deleteTarget = 0;
     pendingNodeId = -1;
@@ -109,6 +112,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     orderStatisticChallenge = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
+    sandboxSeedFieldFocused = false;
     eventTimer = 0.0f;
     heapRaceSecondsRemaining = 0.0f;
     heapRaceTimeLimit = 60.0f;
@@ -2263,9 +2267,15 @@ void GameApp::processInput() {
     if (screenState == 4) {
         int codepoint = GetCharPressed();
         while (codepoint > 0) {
-            if (codepoint >= '0' && codepoint <= '9') {
+            if (sandboxSeedFieldFocused && codepoint >= '0' && codepoint <= '9') {
+                if (sandboxSeedInput.size() < 10) sandboxSeedInput += (char)codepoint;
+            }
+            else if (codepoint >= '0' && codepoint <= '9') {
                 if (sandboxSecondFieldFocused) sandboxSecondInput += (char)codepoint;
                 else sandboxValueInput += (char)codepoint;
+            }
+            else if (codepoint == '-' && sandboxSeedFieldFocused && sandboxSeedInput.empty()) {
+                sandboxSeedInput += '-';
             }
             else if (codepoint == '-' &&
                 (sandboxSecondFieldFocused ? sandboxSecondInput : sandboxValueInput).empty()) {
@@ -2275,11 +2285,13 @@ void GameApp::processInput() {
             codepoint = GetCharPressed();
         }
         if (IsKeyPressed(KEY_BACKSPACE)) {
-            std::string& field = sandboxSecondFieldFocused ? sandboxSecondInput : sandboxValueInput;
+            std::string& field = sandboxSeedFieldFocused ? sandboxSeedInput :
+                sandboxSecondFieldFocused ? sandboxSecondInput : sandboxValueInput;
             if (!field.empty()) field.pop_back();
         }
         if (IsKeyPressed(KEY_ENTER)) {
-            executeSandboxAction(sandboxAction);
+            if (sandboxSeedFieldFocused) randomizeSandbox();
+            else executeSandboxAction(sandboxAction);
         }
     }
 
@@ -2338,8 +2350,11 @@ void GameApp::processInput() {
             currentLevelIndex = -1;
             sandboxValueInput.clear();
             sandboxSecondInput.clear();
+            sandboxSeedInput.clear();
             sandboxSecondFieldFocused = false;
+            sandboxSeedFieldFocused = false;
             runAction(0, 0, 0);
+            selectSandboxStructure(sandboxStructureType);
         }
         return;
     }
@@ -2387,36 +2402,73 @@ void GameApp::processInput() {
             screenState = 0;
             return;
         }
-        if (CheckCollisionPointRec(mouse, Rectangle{ 24, 118, 210, 40 })) {
+        if (CheckCollisionPointRec(mouse, Rectangle{ 24, 104, 100, 36 })) {
+            selectSandboxStructure(0);
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 134, 104, 100, 36 })) {
+            selectSandboxStructure(1);
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 24, 146, 100, 36 })) {
+            selectSandboxStructure(2);
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 134, 146, 100, 36 })) {
+            selectSandboxStructure(3);
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 24, 215, 210, 36 })) {
+            sandboxSeedFieldFocused = true;
+            sandboxSecondFieldFocused = false;
+            if (sandboxSeedInput.empty()) sandboxSeedInput = std::to_string(sandboxSeed);
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 24, 257, 210, 40 })) {
+            randomizeSandbox();
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 24, 330, 210, 36 })) {
+            sandboxSeedFieldFocused = false;
             sandboxSecondFieldFocused = false;
             return;
         }
-        if (CheckCollisionPointRec(mouse, Rectangle{ 24, 194, 210, 40 })) {
+        if (CheckCollisionPointRec(mouse, Rectangle{ 24, 398, 210, 36 })) {
+            sandboxSeedFieldFocused = false;
             sandboxSecondFieldFocused = true;
             return;
         }
-        if (CheckCollisionPointRec(mouse, Rectangle{ 24, 260, 210, 42 })) {
-            executeSandboxAction(ACTION_SEARCH);
+        for (int operation = 0; operation < 5; operation++) {
+            Rectangle bounds{ 24, (float)(450 + operation * 48), 210, 40 };
+            if (!CheckCollisionPointRec(mouse, bounds)) continue;
+            if (operation == 4) {
+                selectSandboxStructure(sandboxStructureType);
+                return;
+            }
+            if (sandboxStructureType == 0) {
+                int actions[4] = { ACTION_TRAVERSE_PREORDER, ACTION_TRAVERSE_INORDER,
+                    ACTION_TRAVERSE_POSTORDER, ACTION_TRAVERSE_LEVEL_ORDER };
+                runAction(actions[operation], 0, 0);
+            }
+            else if (sandboxStructureType == 3) {
+                int actions[4] = { ACTION_HEAP_BUILD, ACTION_HEAPIFY,
+                    ACTION_EXTRACT_MAX, ACTION_HEAP_SORT };
+                runAction(actions[operation], 0, 0);
+            }
+            else if (operation == 0) executeSandboxAction(ACTION_SEARCH);
+            else if (operation == 1) executeSandboxAction(ACTION_INSERT);
+            else if (operation == 2) executeSandboxAction(ACTION_DELETE);
+            else executeSandboxAction(ACTION_RANGE_QUERY);
+            return;
         }
-        else if (CheckCollisionPointRec(mouse, Rectangle{ 24, 310, 210, 42 })) {
-            executeSandboxAction(ACTION_INSERT);
+        if (sandboxStructureType == 0 || sandboxStructureType == 3) {
+            return;
         }
-        else if (CheckCollisionPointRec(mouse, Rectangle{ 24, 360, 210, 42 })) {
-            executeSandboxAction(ACTION_DELETE);
-        }
-        else if (CheckCollisionPointRec(mouse, Rectangle{ 24, 410, 210, 42 })) {
-            executeSandboxAction(ACTION_RANGE_QUERY);
-        }
-        else if (CheckCollisionPointRec(mouse, Rectangle{ 24, 460, 210, 42 })) {
-            runAction(0, 0, 0);
-        }
-        else {
-            for (int i = 0; i < positions.size(); i++) {
-                Vector2 center = Vector2{ positions[i].x, positions[i].y };
-                if (CheckCollisionPointCircle(mouse, center, 31.0f)) {
-                    highlightedNodeId = positions[i].id;
-                    break;
-                }
+        for (int i = 0; i < positions.size(); i++) {
+            Vector2 center = Vector2{ positions[i].x, positions[i].y };
+            if (CheckCollisionPointCircle(mouse, center, 31.0f)) {
+                highlightedNodeId = positions[i].id;
+                break;
             }
         }
         return;
@@ -2995,34 +3047,215 @@ void GameApp::drawMainMenu() {
 
 void GameApp::drawSandbox() {
     DrawText("VAULT HEIST - SANDBOX", 24, 22, 30, Color{ 240, 220, 170, 255 });
-    DrawText("Explore model operations on the demo tree", 285, 54, 16,
+    DrawText("Choose a structure and build a repeatable random setup", 285, 54, 16,
         Color{ 175, 190, 210, 255 });
     drawPlaybackControls();
     DrawLine(260, 80, 260, windowHeight - 24, Color{ 62, 76, 96, 255 });
 
-    DrawText("VALUE", 24, 94, 14, Color{ 150, 175, 205, 255 });
-    DrawRectangle(24, 118, 210, 40, Color{ 25, 34, 48, 255 });
-    DrawRectangleLinesEx(Rectangle{ 24, 118, 210, 40 }, 2.0f,
-        sandboxSecondFieldFocused ? Color{ 62, 76, 96, 255 } :
-        Color{ 240, 220, 170, 255 });
-    DrawText(sandboxValueInput.c_str(), 36, 128, 18, Color{ 230, 235, 242, 255 });
+    DrawText("STRUCTURE", 24, 82, 14, Color{ 150, 175, 205, 255 });
+    const char* structureLabels[4] = { "Binary", "BST", "AVL", "Max Heap" };
+    for (int i = 0; i < 4; i++) {
+        float x = i % 2 == 0 ? 24.0f : 134.0f;
+        float y = i < 2 ? 104.0f : 146.0f;
+        Rectangle bounds{ x, y, 100, 36 };
+        drawButton(bounds, structureLabels[i], true);
+        if (sandboxStructureType == i) {
+            DrawRectangleLinesEx(bounds, 3.0f, Color{ 240, 220, 170, 255 });
+        }
+    }
 
-    DrawText("RANGE HIGH", 24, 170, 14, Color{ 150, 175, 205, 255 });
-    DrawRectangle(24, 194, 210, 40, Color{ 25, 34, 48, 255 });
-    DrawRectangleLinesEx(Rectangle{ 24, 194, 210, 40 }, 2.0f,
-        sandboxSecondFieldFocused ? Color{ 240, 220, 170, 255 } :
+    DrawText("SEED", 24, 190, 14, Color{ 150, 175, 205, 255 });
+    DrawRectangle(24, 215, 210, 36, Color{ 25, 34, 48, 255 });
+    DrawRectangleLinesEx(Rectangle{ 24, 215, 210, 36 }, 2.0f,
+        sandboxSeedFieldFocused ? Color{ 240, 220, 170, 255 } :
         Color{ 62, 76, 96, 255 });
-    DrawText(sandboxSecondInput.c_str(), 36, 204, 18, Color{ 230, 235, 242, 255 });
+    std::string seedLabel = sandboxSeedInput.empty()
+        ? "auto / last " + std::to_string(sandboxSeed) : sandboxSeedInput;
+    DrawText(seedLabel.c_str(), 36, 224, 17, Color{ 230, 235, 242, 255 });
+    drawButton(Rectangle{ 24, 257, 210, 40 }, "Random setup", true);
 
-    const char* labels[5] = { "Search", "Insert", "Delete", "Range query", "Reset demo" };
+    bool needsKeyInput = sandboxStructureType == 1 || sandboxStructureType == 2;
+    if (needsKeyInput) {
+        DrawText("VALUE", 24, 306, 14, Color{ 150, 175, 205, 255 });
+        DrawRectangle(24, 330, 210, 36, Color{ 25, 34, 48, 255 });
+        DrawRectangleLinesEx(Rectangle{ 24, 330, 210, 36 }, 2.0f,
+            !sandboxSeedFieldFocused && !sandboxSecondFieldFocused
+                ? Color{ 240, 220, 170, 255 } : Color{ 62, 76, 96, 255 });
+        DrawText(sandboxValueInput.c_str(), 36, 339, 17, Color{ 230, 235, 242, 255 });
+
+        DrawText("RANGE HIGH", 24, 374, 14, Color{ 150, 175, 205, 255 });
+        DrawRectangle(24, 398, 210, 36, Color{ 25, 34, 48, 255 });
+        DrawRectangleLinesEx(Rectangle{ 24, 398, 210, 36 }, 2.0f,
+            sandboxSecondFieldFocused ? Color{ 240, 220, 170, 255 } :
+            Color{ 62, 76, 96, 255 });
+        DrawText(sandboxSecondInput.c_str(), 36, 407, 17, Color{ 230, 235, 242, 255 });
+    }
+
+    const char* treeLabels[5] = { "Search", "Insert", "Delete", "Range query", "Reset setup" };
+    const char* binaryLabels[5] = { "Preorder", "Inorder", "Postorder", "Level order", "Reset setup" };
+    const char* heapLabels[5] = { "Build max heap", "Heapify root", "Extract max", "Heap sort", "Reset setup" };
+    const char** labels = sandboxStructureType == 0 ? binaryLabels :
+        sandboxStructureType == 3 ? heapLabels : treeLabels;
     for (int i = 0; i < 5; i++) {
-        drawButton(Rectangle{ 24, (float)(260 + i * 50), 210, 42 }, labels[i], true);
+        drawButton(Rectangle{ 24, (float)(450 + i * 48), 210, 40 }, labels[i], true);
     }
     drawButton(Rectangle{ 24, 725, 180, 44 }, "Main menu", true);
-    drawTree();
+    if (view.viewType == MODEL_VIEW_HEAP) drawHeapView();
+    else drawTree();
     drawEventLog();
     DrawText(message.c_str(), 285, windowHeight - 42, 18,
         Color{ 220, 224, 230, 255 });
+}
+
+void GameApp::selectSandboxStructure(int structureType) {
+    if (structureType < 0 || structureType > 3) return;
+    sandboxStructureType = structureType;
+    int scenarioId = structureType == 0 ? 12 :
+        structureType == 1 ? 2 : structureType == 2 ? 3 : 4;
+    EventLog setup;
+    if (!model.loadScenario(scenarioId, setup)) {
+        message = model.statusText();
+        return;
+    }
+    sandboxValueInput.clear();
+    sandboxSecondInput.clear();
+    sandboxSeedFieldFocused = false;
+    sandboxSecondFieldFocused = false;
+    events.clear();
+    alarmSteps = 0;
+    wrongClicks = 0;
+    currentEvent = -1;
+    nextEvent = 0;
+    highlightedNodeId = -1;
+    selectedHeapIndex = -1;
+    animationPlaying = true;
+    eventTimer = 0.0f;
+    refreshView();
+    message = structureType == 0 ? "Binary tree selected" :
+        structureType == 1 ? "BST selected" :
+        structureType == 2 ? "AVL tree selected" : "Max heap selected";
+}
+
+int GameApp::nextSandboxRandom() {
+    long long next = (long long)sandboxRandomState * 48271LL % 2147483647LL;
+    sandboxRandomState = (int)next;
+    return sandboxRandomState;
+}
+
+bool GameApp::sandboxContainsKey(int key) {
+    for (int i = 0; i < view.treeNodes.size(); i++) {
+        if (view.treeNodes[i].value == key) return true;
+    }
+    return false;
+}
+
+void GameApp::randomizeSandbox() {
+    int enteredSeed = 0;
+    if (sandboxSeedInput.empty()) {
+        sandboxSeed = (int)(GetTime() * 1000.0) + 1;
+    }
+    else {
+        try {
+            enteredSeed = std::stoi(sandboxSeedInput);
+            sandboxSeed = enteredSeed;
+        }
+        catch (...) {
+            message = "Seed must be a whole number.";
+            return;
+        }
+    }
+    long long normalizedSeed = (long long)sandboxSeed % 2147483646LL;
+    if (normalizedSeed <= 0) normalizedSeed += 2147483646LL;
+    sandboxRandomState = (int)normalizedSeed;
+    sandboxSeed = (int)normalizedSeed;
+    sandboxSeedFieldFocused = false;
+    sandboxSecondFieldFocused = false;
+    events.clear();
+    currentEvent = -1;
+    nextEvent = 0;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    highlightedNodeId = -1;
+    selectedHeapIndex = -1;
+    int scenarioId = sandboxStructureType == 0
+        ? 12 + nextSandboxRandom() % 2
+        : sandboxStructureType == 1 ? 25
+        : sandboxStructureType == 2 ? 3 : 4;
+    EventLog setup;
+    if (!model.loadScenario(scenarioId, setup)) {
+        message = model.statusText();
+        return;
+    }
+    refreshView();
+
+    if (sandboxStructureType == 1 || sandboxStructureType == 2) {
+        int targetCount = sandboxStructureType == 1 ? 8 : 5;
+        int inserted = 0;
+        int attempts = 0;
+        while (inserted < targetCount && attempts < 200) {
+            attempts++;
+            int key = nextSandboxRandom() % 200 - 50;
+            if (sandboxContainsKey(key)) continue;
+            EventLog insertion;
+            if (!model.performAction(ACTION_INSERT, key, 0, insertion)) continue;
+            for (int eventIndex = 0; eventIndex < insertion.size(); eventIndex++) {
+                events.add(insertion.get(eventIndex));
+            }
+            refreshView();
+            inserted++;
+        }
+        if (inserted != targetCount) {
+            message = "Could not generate enough unique keys; choose another seed.";
+            return;
+        }
+    }
+    else if (sandboxStructureType == 3) {
+        int swaps = 0;
+        bool validHeap = false;
+        while (swaps < 128 && !validHeap) {
+            DynArray<int> availableChildren;
+            for (int child = 1; child < view.heapSize; child++) {
+                int parent = (child - 1) / 2;
+                if (view.heapValues[child] > view.heapValues[parent]) {
+                    availableChildren.push(child);
+                }
+            }
+            if (availableChildren.size() == 0) break;
+            int child = availableChildren[nextSandboxRandom() % availableChildren.size()];
+            EventLog swapEvents;
+            int parent = (child - 1) / 2;
+            if (!model.performAction(ACTION_HEAP_SWAP, parent, child, swapEvents)) {
+                message = model.statusText();
+                return;
+            }
+            for (int eventIndex = 0; eventIndex < swapEvents.size(); eventIndex++) {
+                events.add(swapEvents.get(eventIndex));
+            }
+            refreshView();
+            swaps++;
+            EventLog check;
+            model.performAction(ACTION_IS_MAX_HEAP, 0, 0, check);
+            for (int eventIndex = 0; eventIndex < check.size(); eventIndex++) {
+                if (check.get(eventIndex).type == EV_DONE && check.get(eventIndex).value == 1) {
+                    validHeap = true;
+                }
+            }
+        }
+        if (!validHeap) {
+            message = "Could not finish the random heap setup.";
+            return;
+        }
+    }
+
+    alarmSteps = events.countAlarmSteps();
+    animationPlaying = true;
+    eventTimer = 0.0f;
+    refreshView();
+    message = "Seed " + std::to_string(sandboxSeed) + " generated a " +
+        (sandboxStructureType == 0 ? std::string("binary-tree setup") :
+         sandboxStructureType == 1 ? std::string("BST setup") :
+         sandboxStructureType == 2 ? std::string("AVL setup") :
+         std::string("max-heap setup"));
 }
 
 void GameApp::executeSandboxAction(int action) {

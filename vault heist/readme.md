@@ -49,10 +49,17 @@ msbuild VaultHeist.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64 /p:Pr
   in the requested order.
 - Click **Search 60** to show a sample BST search path.
 - Click **Reset level** to restore the sample tree and counters.
-- From the main menu, open **Sandbox**, focus the value field, and type an
-  integer. Use Search, Insert, Delete, or Range Query; enter the range high
-  value in the second field. Press Enter to repeat the last operation.
-- Use **Reset demo** in the Sandbox to restore its starting tree.
+- From the main menu, open **Sandbox** and choose Binary, BST, AVL, or Max Heap.
+- Type a seed and choose **Random setup** to create a repeatable setup. The
+  displayed seed can be reused to regenerate it. Binary Tree selects a seeded
+  sample; BST and AVL generate seeded keys; Max Heap uses seeded legal swaps
+  to build a valid heap from its sample values.
+- For BST/AVL, type a key in **Value** and use Search, Insert, Delete, or Range
+  Query; enter the range high value in the second field. Press Enter to repeat
+  the last operation.
+- Binary Tree exposes its four traversals. Max Heap exposes build, root
+  heapify, extract-max, and heap sort. **Reset setup** restores the selected
+  structure's starting state.
 - Use **Escape** to return to the previous menu.
 - Close the window to exit.
 

@@ -320,6 +320,48 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         return true;
     }
 
+    if (scenarioId == 2) {
+        int fixture[7][5] = {
+            { 1, 50, 2, 3, -1 }, { 2, 30, 4, 5, 1 },
+            { 3, 70, 6, 7, 1 }, { 4, 20, -1, -1, 2 },
+            { 5, 40, -1, -1, 2 }, { 6, 60, -1, -1, 3 },
+            { 7, 80, -1, -1, 3 }
+        };
+        for (int i = 0; i < 7; i++) {
+            ViewNode node;
+            node.id = fixture[i][0]; node.value = fixture[i][1];
+            node.leftId = fixture[i][2]; node.rightId = fixture[i][3];
+            node.parentId = fixture[i][4];
+            view.treeNodes.push(node);
+        }
+        view.viewType = MODEL_VIEW_TREE;
+        refreshMetadata();
+        message = "Seven-key BST loaded";
+        events.clear();
+        return true;
+    }
+
+    if (scenarioId == 12) {
+        int fixture[7][5] = {
+            { 1, 40, 2, 3, -1 }, { 2, 20, 4, 5, 1 },
+            { 3, 70, 6, 7, 1 }, { 4, 10, -1, -1, 2 },
+            { 5, 30, -1, -1, 2 }, { 6, 60, -1, -1, 3 },
+            { 7, 90, -1, -1, 3 }
+        };
+        for (int i = 0; i < 7; i++) {
+            ViewNode node;
+            node.id = fixture[i][0]; node.value = fixture[i][1];
+            node.leftId = fixture[i][2]; node.rightId = fixture[i][3];
+            node.parentId = fixture[i][4];
+            view.treeNodes.push(node);
+        }
+        view.viewType = MODEL_VIEW_TREE;
+        refreshMetadata();
+        message = "Binary tree scenario 12 loaded";
+        events.clear();
+        return true;
+    }
+
     if (scenarioId == 3 || scenarioId == 40) {
         int fixture[7][5] = {
             { 1, 50, 2, 3, -1 }, { 2, 30, 4, 5, 1 },
@@ -336,6 +378,7 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         }
         view.viewType = MODEL_VIEW_TREE;
         refreshMetadata();
+        avlMode = true;
         message = "Order-statistic AVL fixture loaded";
         events.clear();
         return true;
