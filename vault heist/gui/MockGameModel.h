@@ -14,6 +14,7 @@ private:
     int calculateSize(int id);
     void refreshMetadata();
     int diameterWalk(int id, int& best);
+    void mirrorWalk(int id);
     void traverseWalk(int id, int mode, EventLog& events);
     std::string visitSummary(std::string name, EventLog& events);
     void removeNodeRecord(int id);

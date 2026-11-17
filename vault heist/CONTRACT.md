@@ -69,6 +69,21 @@ default value from `Event`.
 - `ACTION_TRAVERSE_POSTORDER` must work on any loaded scenario (the GUI asks the model for the
   route; it never computes it).
 
+## Act 1.4 addition (matches the shared model contract)
+
+- `ACTION_LCA` (15) takes two node IDs in `value` and `secondValue`.
+- The model returns the lowest common ancestor in `EV_DONE.nodeId` and the distance between
+  the selected rooms, in edges, in `EV_DONE.value`. The GUI asks the model for this result;
+  it does not walk parent links to compute it.
+- The GUI's level flow lets the player select two distinct rooms, then identify the returned
+  ancestor. Each selected room and the answer attempt costs one alarm step.
+
+## Act 1.5 addition (matches the shared model contract)
+
+- `ACTION_MIRROR` (16) mirrors the currently loaded binary tree in the model.
+- The GUI calls the operation, refreshes `ModelView`, and renders the updated left/right links.
+  The GUI does not swap child links itself.
+
 ## Public model interface to finalize
 
 Before the GUI calls model operations, Yusha records exact class names,

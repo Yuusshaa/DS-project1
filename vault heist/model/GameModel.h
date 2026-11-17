@@ -61,6 +61,9 @@ struct ModelView {
 #define ACTION_EXTRACT_MAX 11
 #define ACTION_HEAP_SORT 12
 #define ACTION_DIAMETER 13
+#define ACTION_HEIGHT 14
+#define ACTION_LCA 15
+#define ACTION_MIRROR 16
 
 class GameModel {
 public:

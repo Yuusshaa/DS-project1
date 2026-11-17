@@ -59,6 +59,18 @@ int MockGameModel::diameterWalk(int id, int& best) {
     return 1 + (leftHeight > rightHeight ? leftHeight : rightHeight);
 }
 
+void MockGameModel::mirrorWalk(int id) {
+    int index = findNodeIndex(id);
+    if (index < 0) return;
+    int oldLeft = view.treeNodes[index].leftId;
+    view.treeNodes[index].leftId = view.treeNodes[index].rightId;
+    view.treeNodes[index].rightId = oldLeft;
+    int newLeft = view.treeNodes[index].leftId;
+    int newRight = view.treeNodes[index].rightId;
+    mirrorWalk(newLeft);
+    mirrorWalk(newRight);
+}
+
 // mode 0 = preorder, 1 = inorder, 2 = postorder.
 void MockGameModel::traverseWalk(int id, int mode, EventLog& events) {
     int index = findNodeIndex(id);
@@ -444,6 +456,57 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
         events.add(done);
         message = "Mock diameter computed";
         return true;
+    }
+    else if (action == ACTION_LCA) {
+        DynArray<int> firstAncestors;
+        int current = value;
+        while (current >= 0) {
+            firstAncestors.push(current);
+            int index = findNodeIndex(current);
+            if (index < 0) break;
+            current = view.treeNodes[index].parentId;
+        }
+        int secondHops = 0;
+        int common = -1;
+        current = secondValue;
+        while (current >= 0 && common < 0) {
+            for (int i = 0; i < firstAncestors.size(); i++) {
+                if (firstAncestors[i] == current) {
+                    common = current;
+                    break;
+                }
+            }
+            if (common >= 0) break;
+            int index = findNodeIndex(current);
+            if (index < 0) break;
+            current = view.treeNodes[index].parentId;
+            secondHops++;
+        }
+        if (common < 0) {
+            message = "LCA endpoints are invalid";
+            return false;
+        }
+        int firstHops = 0;
+        for (int i = 0; i < firstAncestors.size(); i++) {
+            if (firstAncestors[i] == common) break;
+            firstHops++;
+        }
+        Event done;
+        done.type = EV_DONE;
+        done.nodeId = common;
+        done.value = firstHops + secondHops;
+        events.add(done);
+        message = "Mock LCA computed";
+        return true;
+    }
+    else if (action == ACTION_MIRROR) {
+        if (view.viewType != MODEL_VIEW_TREE || findRootId() < 0) {
+            message = "No binary tree is available to mirror";
+            return false;
+        }
+        mirrorWalk(findRootId());
+        refreshMetadata();
+        message = "Mock tree mirrored";
     }
     else {
         message = "This mock action is not wired yet";

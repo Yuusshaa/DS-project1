@@ -56,6 +56,10 @@ private:
     int pendingNodeId;              // Act 1.3: room waiting for a typed height
     int heightPhase;                // Act 1.3: 0 idle, 1 entering heights, 2 reporting diameter
     int expectedDiameter;           // Act 1.3: answer supplied by the model
+    int lcaFirstNode;
+    int lcaSecondNode;
+    int expectedLcaNode;
+    int expectedLcaPathLength;
     int heightOptimalSteps;         // Act 1.3: rooms + 1 diameter report
     int expectedDeleteCase;
     int rangeLow;
@@ -74,6 +78,7 @@ private:
     bool rangeChallenge;
     bool balanceChallenge;
     bool heightChallenge;
+    bool lcaChallenge;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
@@ -98,6 +103,9 @@ private:
     void submitHeightAnswer();
     void heightPenalty(std::string text);
     void finishHeightLevel(bool answeredAll);
+    void startLcaChallenge();
+    void finishLcaChallenge(bool correct);
+    void startMirrorChallenge();
     int enteredHeightFor(int id);
     bool isLevel(int act, int number);
     void drawHeightPanel();

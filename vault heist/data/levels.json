@@ -34,7 +34,10 @@
       "title": "Meeting Room",
       "concept": "LCA and paths",
       "objective": "Find the lowest common ancestor and path length.",
-      "implemented": false
+      "scenarioId": 13,
+      "optimalSteps": 3,
+      "alarmCapacity": 6,
+      "implemented": true
     },
     {
       "act": 1,
@@ -42,7 +45,10 @@
       "title": "Mirror the Vault",
       "concept": "tree inversion",
       "objective": "Mirror the binary tree.",
-      "implemented": false
+      "scenarioId": 13,
+      "optimalSteps": 1,
+      "alarmCapacity": 3,
+      "implemented": true
     },
 
     {

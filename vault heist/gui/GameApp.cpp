@@ -20,6 +20,10 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     pendingNodeId = -1;
     heightPhase = 0;
     expectedDiameter = 0;
+    lcaFirstNode = -1;
+    lcaSecondNode = -1;
+    expectedLcaNode = -1;
+    expectedLcaPathLength = 0;
     heightOptimalSteps = 0;
     expectedDeleteCase = 0;
     rangeLow = 0;
@@ -38,6 +42,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     rangeChallenge = false;
     balanceChallenge = false;
     heightChallenge = false;
+    lcaChallenge = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
@@ -75,6 +80,7 @@ void GameApp::runAction(int action, int value, int secondValue) {
     rangeChallenge = false;
     balanceChallenge = false;
     heightChallenge = false;
+    lcaChallenge = false;
     heightPhase = 0;
     pendingNodeId = -1;
     answerInput.clear();
@@ -643,6 +649,88 @@ void GameApp::finishHeightLevel(bool answeredAll) {
     screenState = 3;
 }
 
+// Act 1.4: the model computes the LCA and path length. The player chooses two
+// rooms and then identifies the returned ancestor; the GUI never walks links.
+void GameApp::startLcaChallenge() {
+    searchChallenge = false;
+    insertChallenge = false;
+    deleteChallenge = false;
+    rangeChallenge = false;
+    balanceChallenge = false;
+    heightChallenge = false;
+    lcaChallenge = true;
+    lcaFirstNode = -1;
+    lcaSecondNode = -1;
+    expectedLcaNode = -1;
+    expectedLcaPathLength = 0;
+    expectedIndex = 0;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    events.clear();
+    challengeActive = true;
+    challengeFinished = false;
+    currentEvent = -1;
+    nextEvent = 0;
+    highlightedNodeId = -1;
+    alarmCapacity = 6;
+    message = "Select two rooms, then click their lowest common ancestor.";
+}
+
+void GameApp::finishLcaChallenge(bool correct) {
+    challengeActive = false;
+    challengeFinished = true;
+    if (correct && alarmSteps < alarmCapacity) {
+        stars = wrongClicks == 0 ? 3 : wrongClicks == 1 ? 2 : 1;
+        score = 1000 - alarmSteps * 10 - wrongClicks * 50;
+        if (score < 0) score = 0;
+        Event result;
+        result.type = EV_DONE;
+        result.nodeId = expectedLcaNode;
+        result.value = expectedLcaPathLength;
+        events.add(result);
+        message = "Correct. Path length: " + std::to_string(expectedLcaPathLength) + " edges.";
+    }
+    else {
+        stars = 0;
+        score = 0;
+        message = "Alarm full. Level failed - retry.";
+    }
+    levelManager.recordResult(currentLevelIndex, stars, score);
+    levelManager.saveProgress("campaign_progress.dat");
+    screenState = 3;
+}
+
+// Act 1.5 is a model operation: ask the model to mirror, then draw its view.
+void GameApp::startMirrorChallenge() {
+    searchChallenge = false;
+    insertChallenge = false;
+    deleteChallenge = false;
+    rangeChallenge = false;
+    balanceChallenge = false;
+    heightChallenge = false;
+    lcaChallenge = false;
+    challengeActive = false;
+    challengeFinished = false;
+    events.clear();
+    if (!model.performAction(ACTION_MIRROR, 0, 0, events)) {
+        message = model.statusText();
+        return;
+    }
+    refreshView();
+    alarmSteps = events.countAlarmSteps();
+    wrongClicks = 0;
+    stars = 3;
+    score = 1000 - alarmSteps * 10;
+    if (score < 0) score = 0;
+    levelManager.recordResult(currentLevelIndex, stars, score);
+    levelManager.saveProgress("campaign_progress.dat");
+    message = "Vault mirrored. Compare the new left and right branches.";
+    challengeFinished = true;
+    screenState = 3;
+}
+
 void GameApp::handleHeightClick(int id) {
     if (heightPhase != 1) {
         message = "All heights are in. Type the diameter and press Enter.";
@@ -734,6 +822,71 @@ void GameApp::handleNodeClick(int id) {
 
     if (heightChallenge) {
         handleHeightClick(id);
+        return;
+    }
+
+    if (lcaChallenge) {
+        if (lcaFirstNode < 0) {
+            lcaFirstNode = id;
+            highlightedNodeId = id;
+            expectedIndex = 1;
+            alarmSteps++;
+            Event selected;
+            selected.type = EV_VISIT;
+            selected.nodeId = id;
+            int index = findNodeIndex(id);
+            if (index >= 0) selected.value = view.treeNodes[index].value;
+            events.add(selected);
+            message = "First room selected. Choose a different second room.";
+        }
+        else if (lcaSecondNode < 0) {
+            if (id == lcaFirstNode) {
+                alarmSteps++;
+                wrongClicks++;
+                if (alarmSteps >= alarmCapacity) finishLcaChallenge(false);
+                else message = "Choose two different rooms.";
+            }
+            else {
+                lcaSecondNode = id;
+                expectedIndex = 2;
+                alarmSteps++;
+                Event selected;
+                selected.type = EV_VISIT;
+                selected.nodeId = id;
+                int index = findNodeIndex(id);
+                if (index >= 0) selected.value = view.treeNodes[index].value;
+                events.add(selected);
+                EventLog answer;
+                if (!model.performAction(ACTION_LCA, lcaFirstNode, lcaSecondNode, answer)) {
+                    message = model.statusText();
+                    return;
+                }
+                expectedLcaNode = -1;
+                expectedLcaPathLength = 0;
+                for (int i = 0; i < answer.size(); i++) {
+                    Event& event = answer.get(i);
+                    if (event.type == EV_DONE) {
+                        expectedLcaNode = event.nodeId;
+                        expectedLcaPathLength = event.value;
+                    }
+                }
+                if (expectedLcaNode < 0) {
+                    message = "The model did not return a common ancestor.";
+                    return;
+                }
+                message = "Now click the lowest common ancestor.";
+            }
+        }
+        else {
+            alarmSteps++;
+            if (id == expectedLcaNode) finishLcaChallenge(true);
+            else {
+                wrongClicks++;
+                highlightedNodeId = id;
+                if (alarmSteps >= alarmCapacity) finishLcaChallenge(false);
+                else message = "Not the lowest common ancestor. Try again.";
+            }
+        }
         return;
     }
 
@@ -1206,6 +1359,8 @@ void GameApp::processInput() {
         levelManager.getLevel(currentLevelIndex).act == 3 &&
         levelManager.getLevel(currentLevelIndex).number == 1;
     bool isHeightLevel = isLevel(1, 3);
+    bool isLcaLevel = isLevel(1, 4);
+    bool isMirrorLevel = isLevel(1, 5);
     if (isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
         int target = levelManager.getLevel(currentLevelIndex).targetValue;
         startSearchChallenge(target);
@@ -1258,27 +1413,39 @@ void GameApp::processInput() {
     else if (isHeightLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
         runAction(0, 0, 0);
     }
-    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel &&
+    else if (isLcaLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
+        startLcaChallenge();
+    }
+    else if (isLcaLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
+        runAction(0, 0, 0);
+    }
+    else if (isMirrorLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
+        startMirrorChallenge();
+    }
+    else if (isMirrorLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
+        runAction(0, 0, 0);
+    }
+    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel &&
         CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
         startTraversalChallenge(ACTION_TRAVERSE_PREORDER);
     }
-    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel &&
+    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel &&
         CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
         startTraversalChallenge(ACTION_TRAVERSE_INORDER);
     }
-    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel &&
+    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel &&
         CheckCollisionPointRec(mouse, Rectangle{ 20, 182, 220, 42 })) {
         startTraversalChallenge(ACTION_TRAVERSE_POSTORDER);
     }
-    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel &&
+    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel &&
         CheckCollisionPointRec(mouse, Rectangle{ 20, 232, 220, 42 })) {
         startTraversalChallenge(ACTION_TRAVERSE_LEVEL_ORDER);
     }
-    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel &&
+    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel &&
         CheckCollisionPointRec(mouse, Rectangle{ 20, 282, 220, 42 })) {
         runAction(ACTION_SEARCH, 60, 0);
     }
-    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel &&
+    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel &&
         CheckCollisionPointRec(mouse, Rectangle{ 20, 332, 220, 42 })) {
         runAction(0, 0, 0);
     }
@@ -1540,7 +1707,9 @@ void GameApp::drawControls() {
         levelManager.getLevel(currentLevelIndex).act == 3 &&
         levelManager.getLevel(currentLevelIndex).number == 1;
     bool isHeightLevel = isLevel(1, 3);
-    if (isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel || isBalanceLevel || isHeightLevel) {
+    bool isLcaLevel = isLevel(1, 4);
+    bool isMirrorLevel = isLevel(1, 5);
+    if (isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel || isBalanceLevel || isHeightLevel || isLcaLevel || isMirrorLevel) {
         LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
         bool degenerationLevel = levelManager.getLevel(currentLevelIndex).number == 5;
         const char* heading = isSearchLevel
@@ -1549,6 +1718,8 @@ void GameApp::drawControls() {
             isDeleteLevel ? "ACT 2.3 - BST DELETE" :
             isRangeLevel ? "ACT 2.4 - BST RANGE" :
             isHeightLevel ? "ACT 1.3 - HEIGHT & DIAMETER" :
+            isLcaLevel ? "ACT 1.4 - LOWEST COMMON ANCESTOR" :
+            isMirrorLevel ? "ACT 1.5 - MIRROR THE VAULT" :
             "ACT 3.1 - BALANCE BADGES";
         DrawText(heading,
             24, 55, 16, Color{ 150, 175, 205, 255 });
@@ -1562,6 +1733,14 @@ void GameApp::drawControls() {
         }
         else if (isHeightLevel) {
             drawButton(Rectangle{ 20, 82, 220, 42 }, "Start heights", true);
+            drawButton(Rectangle{ 20, 132, 220, 42 }, "Reset level", true);
+        }
+        else if (isLcaLevel) {
+            drawButton(Rectangle{ 20, 82, 220, 42 }, "Start LCA", true);
+            drawButton(Rectangle{ 20, 132, 220, 42 }, "Reset level", true);
+        }
+        else if (isMirrorLevel) {
+            drawButton(Rectangle{ 20, 82, 220, 42 }, "Mirror tree", true);
             drawButton(Rectangle{ 20, 132, 220, 42 }, "Reset level", true);
         }
         else if (isRangeLevel) {
@@ -1592,7 +1771,7 @@ void GameApp::drawControls() {
         "Quiz: Preorder", "Quiz: Inorder", "Quiz: Postorder", "Quiz: Level order",
         "Search 60", "Reset level"
     };
-    for (int i = 0; i < ((isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel || isBalanceLevel || isHeightLevel) ? 0 : 6); i++) {
+    for (int i = 0; i < ((isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel || isBalanceLevel || isHeightLevel || isLcaLevel || isMirrorLevel) ? 0 : 6); i++) {
         int y = 82 + i * 50;
         DrawRectangleRounded(Rectangle{ 20, (float)y, 220, 42 }, 0.15f, 6,
             Color{ 42, 57, 78, 255 });
@@ -1621,6 +1800,19 @@ void GameApp::drawControls() {
         Color{ 150, 165, 185, 255 });
     DrawText(TextFormat("Stars: %i   Score: %i", stars, score), 24, 525, 15,
         Color{ 240, 220, 170, 255 });
+    if (lcaChallenge) {
+        int firstIndex = findNodeIndex(lcaFirstNode);
+        int secondIndex = findNodeIndex(lcaSecondNode);
+        std::string selections = "Rooms: ";
+        selections += firstIndex >= 0 ? std::to_string(view.treeNodes[firstIndex].value) : "?";
+        selections += " and ";
+        selections += secondIndex >= 0 ? std::to_string(view.treeNodes[secondIndex].value) : "?";
+        DrawText(selections.c_str(), 24, 552, 14, Color{ 205, 212, 224, 255 });
+        if (expectedLcaNode >= 0) {
+            DrawText(TextFormat("Path: %i edges", expectedLcaPathLength), 24, 572, 14,
+                Color{ 240, 220, 170, 255 });
+        }
+    }
 }
 
 void GameApp::drawHeightPanel() {
