@@ -57,15 +57,13 @@ default value from `Event`.
 | `EV_HEAP_SORT_COMPLETE` | Signals completion; GUI reads final array from the model. |
 | `EV_DONE` | Ends the batch; `note` may summarize the result. For `ACTION_DIAMETER`, V=diameter measured in edges (a single node has diameter 0). |
 
-## Act 1.3 additions (proposed by Hussain, needs Yusha's OK)
+## Act 1.3 agreed fixture and action
 
-- `ACTION_DIAMETER` (13): no event except `EV_DONE`; the answer is in `EV_DONE.value`.
-  Diameter is counted in **edges** (leaf height 1, so diameter = max over rooms of
-  leftHeight + rightHeight). `BinaryTree::diameter()` already does this.
-- Scenario `13`: fixed 9-room tree, ids 1-9. Rooms (id:value) 1:40 (left 2, right 3);
-  2:15 leaf; 3:60 (left 4, right 5); 4:30 (left 6); 5:80 (right 7); 6:20 (right 8);
-  7:70 (left 9); 8:25 leaf; 9:75 leaf. Postorder ids: 2 8 6 4 9 7 5 3 1. Root height 5,
-  diameter 6 (bends at room 3, not at the root).
+- `ACTION_DIAMETER` (13): the answer is in `EV_DONE.value`. Diameter is counted in edges;
+  leaf height is 1 and null height is 0.
+- Scenario `13`: fixed 9-room tree, ids 1-9: 1:50 (left 2, right 4); 2:30 (left 3,
+  right 6); 3:20 (left 5); 4:70 (left 7, right 8); 5:10; 6:40; 7:60; 8:90 (right 9);
+  9:100. Postorder ids: 5 3 6 2 7 9 8 4 1. Root height 4, diameter 6.
 - `ACTION_TRAVERSE_POSTORDER` must work on any loaded scenario (the GUI asks the model for the
   route; it never computes it).
 

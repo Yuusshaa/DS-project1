@@ -180,18 +180,18 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
     }
 
     if (scenarioId == 13) {
-        // Act 1.3: fixed 9-room tree. The longest path bends at node 3, not at the root.
+        // Shared Act 1.3/1.4/1.5 fixture: root 50, height 4, diameter 6.
         // id, value, left, right, parent
         int rows[9][5] = {
-            {1, 40,  2,  3, -1},
-            {2, 15, -1, -1,  1},
-            {3, 60,  4,  5,  1},
-            {4, 30,  6, -1,  3},
-            {5, 80, -1,  7,  3},
-            {6, 20, -1,  8,  4},
-            {7, 70,  9, -1,  5},
-            {8, 25, -1, -1,  6},
-            {9, 75, -1, -1,  7}
+            {1, 50,  2,  4, -1},
+            {2, 30,  3,  6,  1},
+            {3, 20,  5, -1,  2},
+            {4, 70,  7,  8,  1},
+            {5, 10, -1, -1,  3},
+            {6, 40, -1, -1,  2},
+            {7, 60, -1, -1,  4},
+            {8, 90, -1,  9,  4},
+            {9, 100,-1, -1,  8}
         };
         for (int i = 0; i < 9; i++) {
             ViewNode node;
