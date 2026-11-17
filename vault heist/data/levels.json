@@ -128,7 +128,10 @@
       "title": "Single Rotations",
       "concept": "LL and RR rotations",
       "objective": "Choose the pivot and repair the tree.",
-      "implemented": false
+      "scenarioId": 31,
+      "optimalSteps": 4,
+      "alarmCapacity": 8,
+      "implemented": true
     },
     {
       "act": 3,
@@ -136,7 +139,10 @@
       "title": "Double Rotations",
       "concept": "LR and RL rotations",
       "objective": "Identify and perform the two rotations.",
-      "implemented": false
+      "scenarioId": 33,
+      "optimalSteps": 6,
+      "alarmCapacity": 11,
+      "implemented": true
     },
     {
       "act": 3,

@@ -54,6 +54,7 @@ private:
     int insertTarget;
     Event pendingInsertEvent;
     DynArray<Event> pendingDeleteEvents;
+    DynArray<Event> rotationHistory;
     int deleteTarget;
     int pendingNodeId;              // Act 1.3: room waiting for a typed height
     int heightPhase;                // Act 1.3: 0 idle, 1 entering heights, 2 reporting diameter
@@ -66,6 +67,15 @@ private:
     int lcaPathCurrentNode;
     int lcaPathProgress;
     int lcaOptimalSteps;
+    int rotationStage;
+    int rotationPhase;
+    int rotationCase;
+    int rotationPivotId;
+    int rotationActionCount;
+    int rotationActionIndex;
+    int rotationExpectedActions[2];
+    int rotationExpectedPivots[2];
+    int rotationOptimalSteps;
     int heightOptimalSteps;         // Act 1.3: rooms + 1 diameter report
     int expectedDeleteCase;
     int rangeLow;
@@ -86,6 +96,7 @@ private:
     bool heightChallenge;
     bool lcaChallenge;
     bool mirrorAnimationActive;
+    bool rotationChallenge;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
@@ -115,6 +126,10 @@ private:
     void finishLcaChallenge(bool correct);
     void startMirrorChallenge();
     void finishMirrorChallenge();
+    void startRotationChallenge();
+    bool prepareRotationStage();
+    void selectRotationAction(int action);
+    void finishRotationChallenge(bool success);
     int enteredHeightFor(int id);
     bool isLevel(int act, int number);
     void drawHeightPanel();

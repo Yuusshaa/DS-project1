@@ -28,6 +28,17 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     lcaPathCurrentNode = -1;
     lcaPathProgress = 0;
     lcaOptimalSteps = 0;
+    rotationStage = 0;
+    rotationPhase = 0;
+    rotationCase = ROT_NONE;
+    rotationPivotId = -1;
+    rotationActionCount = 0;
+    rotationActionIndex = 0;
+    rotationExpectedActions[0] = 0;
+    rotationExpectedActions[1] = 0;
+    rotationExpectedPivots[0] = -1;
+    rotationExpectedPivots[1] = -1;
+    rotationOptimalSteps = 0;
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
     heightOptimalSteps = 0;
@@ -49,6 +60,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     balanceChallenge = false;
     heightChallenge = false;
     lcaChallenge = false;
+    rotationChallenge = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
@@ -87,6 +99,7 @@ void GameApp::runAction(int action, int value, int secondValue) {
     balanceChallenge = false;
     heightChallenge = false;
     lcaChallenge = false;
+    rotationChallenge = false;
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
     heightPhase = 0;
@@ -778,6 +791,191 @@ void GameApp::finishMirrorChallenge() {
     screenState = 3;
 }
 
+void GameApp::startRotationChallenge() {
+    searchChallenge = false;
+    insertChallenge = false;
+    deleteChallenge = false;
+    rangeChallenge = false;
+    balanceChallenge = false;
+    heightChallenge = false;
+    lcaChallenge = false;
+    mirrorAnimationActive = false;
+    rotationChallenge = true;
+    rotationStage = 0;
+    rotationPhase = 0;
+    rotationActionIndex = 0;
+    rotationHistory.clear();
+    events.clear();
+    currentEvent = -1;
+    nextEvent = 0;
+    eventTimer = 0.0f;
+    animationPlaying = false;
+    highlightedNodeId = -1;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    rotationOptimalSteps = isLevel(3, 2) ? 4 : 6;
+    alarmCapacity = (3 * rotationOptimalSteps + 1) / 2 + 2;
+    challengeActive = true;
+    challengeFinished = false;
+    if (!prepareRotationStage()) {
+        rotationChallenge = false;
+        challengeActive = false;
+        return;
+    }
+    message = "Click the lowest unbalanced room, then choose the fixing rotation.";
+}
+
+bool GameApp::prepareRotationStage() {
+    int scenarioId = 31;
+    if (isLevel(3, 2)) scenarioId = rotationStage == 0 ? 31 : 32;
+    else scenarioId = rotationStage == 0 ? 33 : 34;
+
+    EventLog setupEvents;
+    if (!model.loadScenario(scenarioId, setupEvents)) {
+        message = model.statusText();
+        return false;
+    }
+    refreshView();
+
+    EventLog caseEvents;
+    if (!model.performAction(ACTION_ROTATION_CASE, 0, 0, caseEvents)) {
+        message = model.statusText();
+        return false;
+    }
+    rotationPivotId = -1;
+    rotationCase = ROT_NONE;
+    for (int i = 0; i < caseEvents.size(); i++) {
+        Event& event = caseEvents.get(i);
+        if (event.type == EV_DONE) {
+            rotationPivotId = event.nodeId;
+            rotationCase = event.value;
+        }
+    }
+    if (rotationPivotId < 0 || rotationCase == ROT_NONE) {
+        message = "This fixture does not contain a repairable rotation case.";
+        return false;
+    }
+
+    rotationExpectedActions[0] = 0;
+    rotationExpectedActions[1] = 0;
+    rotationExpectedPivots[0] = -1;
+    rotationExpectedPivots[1] = -1;
+    rotationActionCount = 1;
+    if (rotationCase == ROT_LL) {
+        rotationExpectedActions[0] = ACTION_ROTATE_RIGHT;
+        rotationExpectedPivots[0] = rotationPivotId;
+    }
+    else if (rotationCase == ROT_RR) {
+        rotationExpectedActions[0] = ACTION_ROTATE_LEFT;
+        rotationExpectedPivots[0] = rotationPivotId;
+    }
+    else if (rotationCase == ROT_LR || rotationCase == ROT_RL) {
+        int pivotIndex = findNodeIndex(rotationPivotId);
+        if (pivotIndex < 0) return false;
+        int childId = rotationCase == ROT_LR
+            ? view.treeNodes[pivotIndex].leftId : view.treeNodes[pivotIndex].rightId;
+        int childIndex = findNodeIndex(childId);
+        if (childIndex < 0) return false;
+        rotationActionCount = 2;
+        if (rotationCase == ROT_LR) {
+            rotationExpectedActions[0] = ACTION_ROTATE_LEFT;
+            rotationExpectedPivots[0] = childId;
+            rotationExpectedActions[1] = ACTION_ROTATE_RIGHT;
+            rotationExpectedPivots[1] = rotationPivotId;
+        }
+        else {
+            rotationExpectedActions[0] = ACTION_ROTATE_RIGHT;
+            rotationExpectedPivots[0] = childId;
+            rotationExpectedActions[1] = ACTION_ROTATE_LEFT;
+            rotationExpectedPivots[1] = rotationPivotId;
+        }
+    }
+    rotationActionIndex = 0;
+    rotationPhase = 0;
+    challengeActive = true;
+    return true;
+}
+
+void GameApp::selectRotationAction(int action) {
+    if (!rotationChallenge || rotationPhase != 1 ||
+        rotationActionIndex < 0 || rotationActionIndex >= rotationActionCount) return;
+
+    if (action != rotationExpectedActions[rotationActionIndex]) {
+        alarmSteps += 2;
+        wrongClicks++;
+        if (alarmSteps >= alarmCapacity) finishRotationChallenge(false);
+        else message = "Wrong rotation. +2 alarm steps and a score penalty.";
+        return;
+    }
+
+    EventLog actionEvents;
+    if (!model.performAction(action, rotationExpectedPivots[rotationActionIndex], 0, actionEvents)) {
+        message = model.statusText();
+        return;
+    }
+    for (int i = 0; i < actionEvents.size(); i++) {
+        rotationHistory.push(actionEvents.get(i));
+    }
+    events.clear();
+    for (int i = 0; i < rotationHistory.size(); i++) events.add(rotationHistory[i]);
+    alarmSteps++;
+    rotationActionIndex++;
+    refreshView();
+    currentEvent = -1;
+    for (int i = events.size() - 1; i >= 0; i--) {
+        if (events.get(i).type == EV_ROTATE) {
+            currentEvent = i;
+            break;
+        }
+    }
+    if (currentEvent < 0) currentEvent = events.size() - 1;
+    nextEvent = currentEvent + 1;
+    eventTimer = 0.0f;
+    animationPlaying = true;
+
+    if (rotationActionIndex < rotationActionCount) {
+        message = "First rotation complete. Choose the second rotation.";
+        return;
+    }
+
+    if (rotationStage == 0) {
+        rotationStage = 1;
+        if (!prepareRotationStage()) {
+            finishRotationChallenge(false);
+            return;
+        }
+        animationPlaying = false;
+        currentEvent = -1;
+        message = "First case repaired. Solve the second rotation case.";
+        return;
+    }
+    finishRotationChallenge(true);
+}
+
+void GameApp::finishRotationChallenge(bool success) {
+    rotationChallenge = false;
+    challengeActive = false;
+    challengeFinished = true;
+    if (success && alarmSteps < alarmCapacity) {
+        if (wrongClicks == 0 && alarmSteps <= rotationOptimalSteps) stars = 3;
+        else if (wrongClicks <= 1 && alarmSteps * 4 <= rotationOptimalSteps * 5) stars = 2;
+        else stars = 1;
+        score = 1000 - 10 * alarmSteps - 50 * wrongClicks;
+        if (score < 0) score = 0;
+        message = "Rotation cases repaired. AVL balance restored.";
+    }
+    else {
+        stars = 0;
+        score = 0;
+        message = "Alarm full. Rotation level failed - retry.";
+    }
+    levelManager.recordResult(currentLevelIndex, stars, score);
+    levelManager.saveProgress("campaign_progress.dat");
+    screenState = 3;
+}
+
 void GameApp::handleHeightClick(int id) {
     if (heightPhase != 1) {
         message = "All heights are in. Type the diameter and press Enter.";
@@ -869,6 +1067,37 @@ void GameApp::handleNodeClick(int id) {
 
     if (heightChallenge) {
         handleHeightClick(id);
+        return;
+    }
+
+    if (rotationChallenge) {
+        if (rotationPhase == 0) {
+            if (id == rotationPivotId) {
+                rotationPhase = 1;
+                alarmSteps++;
+                highlightedNodeId = id;
+                Event selected;
+                selected.type = EV_BALANCE_ALERT;
+                selected.nodeId = id;
+                events.add(selected);
+                rotationHistory.push(selected);
+                currentEvent = events.size() - 1;
+                nextEvent = events.size();
+                message = rotationCase == ROT_LL ? "LL case. Choose rotate right." :
+                    rotationCase == ROT_RR ? "RR case. Choose rotate left." :
+                    rotationCase == ROT_LR ? "LR case. Choose the left rotation first." :
+                    "RL case. Choose the right rotation first.";
+            }
+            else {
+                alarmSteps++;
+                wrongClicks++;
+                if (alarmSteps >= alarmCapacity) finishRotationChallenge(false);
+                else message = "Wrong pivot. Select the lowest unbalanced room.";
+            }
+        }
+        else {
+            message = "Choose a rotation using the buttons on the left.";
+        }
         return;
     }
 
@@ -1466,6 +1695,7 @@ void GameApp::processInput() {
     bool isHeightLevel = isLevel(1, 3);
     bool isLcaLevel = isLevel(1, 4);
     bool isMirrorLevel = isLevel(1, 5);
+    bool isRotationLevel = isLevel(3, 2) || isLevel(3, 3);
     if (isSearchLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
         int target = levelManager.getLevel(currentLevelIndex).targetValue;
         startSearchChallenge(target);
@@ -1530,27 +1760,39 @@ void GameApp::processInput() {
     else if (isMirrorLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
         runAction(0, 0, 0);
     }
-    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel &&
+    else if (isRotationLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
+        startRotationChallenge();
+    }
+    else if (isRotationLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
+        runAction(0, 0, 0);
+    }
+    else if (isRotationLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 182, 220, 42 })) {
+        selectRotationAction(ACTION_ROTATE_LEFT);
+    }
+    else if (isRotationLevel && CheckCollisionPointRec(mouse, Rectangle{ 20, 232, 220, 42 })) {
+        selectRotationAction(ACTION_ROTATE_RIGHT);
+    }
+    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel && !isRotationLevel &&
         CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
         startTraversalChallenge(ACTION_TRAVERSE_PREORDER);
     }
-    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel &&
+    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel && !isRotationLevel &&
         CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
         startTraversalChallenge(ACTION_TRAVERSE_INORDER);
     }
-    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel &&
+    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel && !isRotationLevel &&
         CheckCollisionPointRec(mouse, Rectangle{ 20, 182, 220, 42 })) {
         startTraversalChallenge(ACTION_TRAVERSE_POSTORDER);
     }
-    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel &&
+    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel && !isRotationLevel &&
         CheckCollisionPointRec(mouse, Rectangle{ 20, 232, 220, 42 })) {
         startTraversalChallenge(ACTION_TRAVERSE_LEVEL_ORDER);
     }
-    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel &&
+    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel && !isRotationLevel &&
         CheckCollisionPointRec(mouse, Rectangle{ 20, 282, 220, 42 })) {
         runAction(ACTION_SEARCH, 60, 0);
     }
-    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel &&
+    else if (!isSearchLevel && !isInsertLevel && !isDeleteLevel && !isRangeLevel && !isBalanceLevel && !isHeightLevel && !isLcaLevel && !isMirrorLevel && !isRotationLevel &&
         CheckCollisionPointRec(mouse, Rectangle{ 20, 332, 220, 42 })) {
         runAction(0, 0, 0);
     }
@@ -1838,7 +2080,10 @@ void GameApp::drawControls() {
     bool isHeightLevel = isLevel(1, 3);
     bool isLcaLevel = isLevel(1, 4);
     bool isMirrorLevel = isLevel(1, 5);
-    if (isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel || isBalanceLevel || isHeightLevel || isLcaLevel || isMirrorLevel) {
+    bool isRotationSingle = isLevel(3, 2);
+    bool isRotationDouble = isLevel(3, 3);
+    bool isRotationLevel = isRotationSingle || isRotationDouble;
+    if (isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel || isBalanceLevel || isHeightLevel || isLcaLevel || isMirrorLevel || isRotationLevel) {
         LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
         bool degenerationLevel = levelManager.getLevel(currentLevelIndex).number == 5;
         const char* heading = isSearchLevel
@@ -1849,6 +2094,8 @@ void GameApp::drawControls() {
             isHeightLevel ? "ACT 1.3 - HEIGHT & DIAMETER" :
             isLcaLevel ? "ACT 1.4 - LOWEST COMMON ANCESTOR" :
             isMirrorLevel ? "ACT 1.5 - MIRROR THE VAULT" :
+            isRotationSingle ? "ACT 3.2 - SINGLE ROTATIONS" :
+            isRotationDouble ? "ACT 3.3 - DOUBLE ROTATIONS" :
             "ACT 3.1 - BALANCE BADGES";
         DrawText(heading,
             24, 55, 16, Color{ 150, 175, 205, 255 });
@@ -1871,6 +2118,12 @@ void GameApp::drawControls() {
         else if (isMirrorLevel) {
             drawButton(Rectangle{ 20, 82, 220, 42 }, "Mirror tree", true);
             drawButton(Rectangle{ 20, 132, 220, 42 }, "Reset level", true);
+        }
+        else if (isRotationLevel) {
+            drawButton(Rectangle{ 20, 82, 220, 42 }, "Start rotations", true);
+            drawButton(Rectangle{ 20, 132, 220, 42 }, "Reset level", true);
+            drawButton(Rectangle{ 20, 182, 220, 42 }, "Rotate left", rotationChallenge && rotationPhase == 1);
+            drawButton(Rectangle{ 20, 232, 220, 42 }, "Rotate right", rotationChallenge && rotationPhase == 1);
         }
         else if (isRangeLevel) {
             startLabel = "Range " + std::to_string(level.rangeLow) + "-" +
@@ -1900,7 +2153,7 @@ void GameApp::drawControls() {
         "Quiz: Preorder", "Quiz: Inorder", "Quiz: Postorder", "Quiz: Level order",
         "Search 60", "Reset level"
     };
-    for (int i = 0; i < ((isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel || isBalanceLevel || isHeightLevel || isLcaLevel || isMirrorLevel) ? 0 : 6); i++) {
+    for (int i = 0; i < ((isSearchLevel || isInsertLevel || isDeleteLevel || isRangeLevel || isBalanceLevel || isHeightLevel || isLcaLevel || isMirrorLevel || isRotationLevel) ? 0 : 6); i++) {
         int y = 82 + i * 50;
         DrawRectangleRounded(Rectangle{ 20, (float)y, 220, 42 }, 0.15f, 6,
             Color{ 42, 57, 78, 255 });
@@ -1923,7 +2176,11 @@ void GameApp::drawControls() {
     DrawRectangle(24, 430, fillWidth, 14, Color{ 216, 117, 73, 255 });
     DrawText(TextFormat("%i / %i steps", alarmSteps, displayCapacity), 24, 451, 15,
         Color{ 205, 212, 224, 255 });
-    if (lcaChallenge) {
+    if (rotationChallenge) {
+        DrawText(TextFormat("Puzzle: %i / 2", rotationStage + 1), 24, 477, 15,
+            Color{ 205, 212, 224, 255 });
+    }
+    else if (lcaChallenge) {
         DrawText(TextFormat("Path edges: %i / %i", lcaPathProgress, expectedLcaPathLength),
             24, 477, 15, Color{ 205, 212, 224, 255 });
     }
@@ -2258,6 +2515,13 @@ std::string GameApp::describeEvent(Event& event) {
             event.code == CMP_GREATER ? " > " : " = ";
         return "Node " + std::to_string(event.nodeId) + relation + "target " +
             std::to_string(event.value);
+    }
+    if (event.type == EV_ROTATE) {
+        std::string direction = event.code == ROT_RR ? "left" : "right";
+        return "Rotate " + direction + " at node " + std::to_string(event.nodeId);
+    }
+    if (event.type == EV_BALANCE_ALERT) {
+        return "Unbalanced pivot selected: node " + std::to_string(event.nodeId);
     }
     if (event.type == EV_DONE) {
         return "Action complete";

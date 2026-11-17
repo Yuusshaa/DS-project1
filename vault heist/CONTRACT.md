@@ -83,6 +83,18 @@ default value from `Event`.
 - The GUI calls the operation, refreshes `ModelView`, and renders the updated left/right links.
   The GUI does not swap child links itself.
 
+## Act 3.2/3.3 rotation interface
+
+- `ACTION_ROTATION_CASE` (19) returns the lowest unbalanced node in `EV_DONE.nodeId` and the
+  case (`ROT_LL`, `ROT_RR`, `ROT_LR`, or `ROT_RL`) in `EV_DONE.value`.
+- `ACTION_ROTATE_LEFT` (17) and `ACTION_ROTATE_RIGHT` (18) take a pivot node ID in `value` and
+  perform one primitive rotation. `EV_ROTATE.nodeId` is the old subtree root, `otherId` is the
+  promoted node, and `code` is `ROT_RR` for a left rotation or `ROT_LL` for a right rotation.
+- The GUI asks the model for the case and performs only the selected primitive operations; it
+  does not rotate or rebalance tree links itself.
+- Mock fixtures 31-34 represent LL, RR, LR, and RL cases respectively. Yusha's real model must
+  expose these same actions and fixtures before these levels can use the real model.
+
 ## Public model interface to finalize
 
 Before the GUI calls model operations, Yusha records exact class names,

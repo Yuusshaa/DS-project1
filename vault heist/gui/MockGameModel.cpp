@@ -179,6 +179,52 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         return true;
     }
 
+    if (scenarioId >= 32 && scenarioId <= 34) {
+        int rows[6][5];
+        int rowCount = 0;
+        if (scenarioId == 32) {
+            int fixture[5][5] = {
+                {1, 50, 2, 3, -1}, {2, 30, -1, -1, 1},
+                {3, 70, -1, 4, 1}, {4, 80, -1, 5, 3},
+                {5, 90, -1, -1, 4}
+            };
+            rowCount = 5;
+            for (int i = 0; i < rowCount; i++) for (int j = 0; j < 5; j++) rows[i][j] = fixture[i][j];
+        }
+        else if (scenarioId == 33) {
+            int fixture[6][5] = {
+                {1, 60, 2, 3, -1}, {2, 40, 4, 5, 1},
+                {3, 80, -1, -1, 1}, {4, 20, -1, -1, 2},
+                {5, 50, -1, 6, 2}, {6, 55, -1, -1, 5}
+            };
+            rowCount = 6;
+            for (int i = 0; i < rowCount; i++) for (int j = 0; j < 5; j++) rows[i][j] = fixture[i][j];
+        }
+        else {
+            int fixture[6][5] = {
+                {1, 50, 2, 3, -1}, {2, 20, -1, -1, 1},
+                {3, 70, 4, 6, 1}, {4, 60, 5, -1, 3},
+                {5, 55, -1, -1, 4}, {6, 80, -1, -1, 3}
+            };
+            rowCount = 6;
+            for (int i = 0; i < rowCount; i++) for (int j = 0; j < 5; j++) rows[i][j] = fixture[i][j];
+        }
+        for (int i = 0; i < rowCount; i++) {
+            ViewNode node;
+            node.id = rows[i][0];
+            node.value = rows[i][1];
+            node.leftId = rows[i][2];
+            node.rightId = rows[i][3];
+            node.parentId = rows[i][4];
+            view.treeNodes.push(node);
+        }
+        view.viewType = MODEL_VIEW_TREE;
+        refreshMetadata();
+        message = "Mock AVL rotation fixture loaded";
+        events.clear();
+        return true;
+    }
+
     if (scenarioId == 13) {
         // Shared Act 1.3/1.4/1.5 fixture: root 50, height 4, diameter 6.
         // id, value, left, right, parent
@@ -507,6 +553,99 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
         mirrorWalk(findRootId());
         refreshMetadata();
         message = "Mock tree mirrored";
+    }
+    else if (action == ACTION_ROTATION_CASE) {
+        int pivotId = -1;
+        int pivotDepth = -1;
+        int selectedCase = ROT_NONE;
+        for (int i = 0; i < view.treeNodes.size(); i++) {
+            ViewNode& node = view.treeNodes[i];
+            int leftHeight = 0;
+            int rightHeight = 0;
+            int leftIndex = findNodeIndex(node.leftId);
+            int rightIndex = findNodeIndex(node.rightId);
+            if (leftIndex >= 0) leftHeight = view.treeNodes[leftIndex].height;
+            if (rightIndex >= 0) rightHeight = view.treeNodes[rightIndex].height;
+            int balance = leftHeight - rightHeight;
+            if (balance < -1 || balance > 1) {
+                int nodeDepth = 0;
+                int parent = node.parentId;
+                while (parent >= 0) {
+                    int parentIndex = findNodeIndex(parent);
+                    if (parentIndex < 0) break;
+                    nodeDepth++;
+                    parent = view.treeNodes[parentIndex].parentId;
+                }
+                if (nodeDepth >= pivotDepth) {
+                    int childId = balance > 1 ? node.leftId : node.rightId;
+                    int childIndex = findNodeIndex(childId);
+                    int childBalance = 0;
+                    if (childIndex >= 0) {
+                        int childLeft = findNodeIndex(view.treeNodes[childIndex].leftId);
+                        int childRight = findNodeIndex(view.treeNodes[childIndex].rightId);
+                        int childLeftHeight = childLeft >= 0 ? view.treeNodes[childLeft].height : 0;
+                        int childRightHeight = childRight >= 0 ? view.treeNodes[childRight].height : 0;
+                        childBalance = childLeftHeight - childRightHeight;
+                    }
+                    selectedCase = balance > 1
+                        ? (childBalance >= 0 ? ROT_LL : ROT_LR)
+                        : (childBalance <= 0 ? ROT_RR : ROT_RL);
+                    pivotId = node.id;
+                    pivotDepth = nodeDepth;
+                }
+            }
+        }
+        Event done;
+        done.type = EV_DONE;
+        done.nodeId = pivotId;
+        done.value = selectedCase;
+        events.add(done);
+        message = selectedCase == ROT_NONE ? "Tree has no unbalanced pivot" : "Rotation case identified";
+        return selectedCase != ROT_NONE;
+    }
+    else if (action == ACTION_ROTATE_LEFT || action == ACTION_ROTATE_RIGHT) {
+        int pivotIndex = findNodeIndex(value);
+        if (pivotIndex < 0) {
+            message = "Rotation pivot was not found";
+            return false;
+        }
+        ViewNode& pivot = view.treeNodes[pivotIndex];
+        int promotedId = action == ACTION_ROTATE_LEFT ? pivot.rightId : pivot.leftId;
+        int promotedIndex = findNodeIndex(promotedId);
+        if (promotedIndex < 0) {
+            message = "Rotation pivot has no child on that side";
+            return false;
+        }
+        int parentId = pivot.parentId;
+        int parentIndex = findNodeIndex(parentId);
+        int middleId = action == ACTION_ROTATE_LEFT
+            ? view.treeNodes[promotedIndex].leftId : view.treeNodes[promotedIndex].rightId;
+        int middleIndex = findNodeIndex(middleId);
+        if (parentIndex >= 0) {
+            if (view.treeNodes[parentIndex].leftId == value) view.treeNodes[parentIndex].leftId = promotedId;
+            else view.treeNodes[parentIndex].rightId = promotedId;
+        }
+        view.treeNodes[promotedIndex].parentId = parentId;
+        if (action == ACTION_ROTATE_LEFT) {
+            pivot.rightId = middleId;
+            if (middleIndex >= 0) view.treeNodes[middleIndex].parentId = value;
+            view.treeNodes[promotedIndex].leftId = value;
+            pivot.parentId = promotedId;
+        }
+        else {
+            pivot.leftId = middleId;
+            if (middleIndex >= 0) view.treeNodes[middleIndex].parentId = value;
+            view.treeNodes[promotedIndex].rightId = value;
+            pivot.parentId = promotedId;
+        }
+        Event rotated;
+        rotated.type = EV_ROTATE;
+        rotated.nodeId = value;
+        rotated.otherId = promotedId;
+        rotated.code = action == ACTION_ROTATE_LEFT ? ROT_RR : ROT_LL;
+        events.add(rotated);
+        refreshMetadata();
+        message = "Mock primitive rotation complete";
     }
     else {
         message = "This mock action is not wired yet";
