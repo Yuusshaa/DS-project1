@@ -47,7 +47,7 @@ private:
     std::string reconstructionSecondTraversal;
     int windowWidth;
     int windowHeight;
-    int screenState; // 0=menu, 1=campaign, 2=level, 3=result
+    int screenState; // 0=menu, 1=campaign, 2=level, 3=result, 4=sandbox, 5=endless, 6=endless result
     int activeAct;
     int currentLevelIndex;
     int currentEvent;
@@ -61,6 +61,13 @@ private:
     int sandboxOperationPage; // 0=tree queries, 1=tree edits, 2=AVL, 3=heap
     int sandboxSeed;
     int sandboxRandomState;
+    int endlessScore;
+    int endlessLives;
+    int endlessTargetAction;
+    int endlessTargetKey;
+    int endlessOperations;
+    int endlessSeed;
+    int endlessRandomState;
     int insertTarget;
     Event pendingInsertEvent;
     DynArray<Event> pendingDeleteEvents;
@@ -148,15 +155,23 @@ private:
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     bool sandboxSeedFieldFocused;
+    bool endlessActive;
+    bool endlessPromptActive;
+    bool endlessOperationWaiting;
     float eventTimer;
     float mirrorAnimationTime;
     float heapRaceSecondsRemaining;
     float heapRaceTimeLimit;
+    float endlessSurvivalTime;
+    float endlessPromptSeconds;
+    float endlessPromptLimit;
 
     void processInput();
     void update(float deltaTime);
     void draw();
     void drawMainMenu();
+    void drawEndlessMode();
+    void drawEndlessResult();
     void drawCampaignMap();
     void drawResultScreen();
     void drawButton(Rectangle bounds, std::string label, bool enabled);
@@ -199,6 +214,12 @@ private:
     void chooseAvlPrediction(int predictedCase);
     void finishAvlPredictionChallenge(bool success);
     void startOrderStatisticChallenge();
+    void startEndlessRun();
+    void makeEndlessPrompt();
+    void chooseEndlessOperation(int action);
+    void missEndlessPrompt(std::string reason);
+    void finishEndlessRun();
+    int nextEndlessRandom();
     int enteredHeightFor(int id);
     bool isLevel(int act, int number);
     void drawHeightPanel();

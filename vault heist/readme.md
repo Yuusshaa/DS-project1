@@ -45,6 +45,10 @@ msbuild VaultHeist.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64 /p:Pr
 ## Controls
 
 - Select **Campaign**, then start level 1.1.
+- Select **Endless survival** to start with an empty BST. Click the requested
+  Insert or Delete button before its timer expires; the prompt pace increases
+  as you survive longer. Three missed operations end the run, and survival
+  time is the score.
 - Click a **Quiz** button to start that traversal challenge, then click rooms
   in the requested order.
 - Click **Search 60** to show a sample BST search path.

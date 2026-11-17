@@ -19,6 +19,13 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     sandboxOperationPage = 0;
     sandboxSeed = 1;
     sandboxRandomState = 1;
+    endlessScore = 0;
+    endlessLives = 3;
+    endlessTargetAction = ACTION_INSERT;
+    endlessTargetKey = 0;
+    endlessOperations = 0;
+    endlessSeed = 1;
+    endlessRandomState = 1;
     insertTarget = 0;
     deleteTarget = 0;
     pendingNodeId = -1;
@@ -114,9 +121,15 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     sandboxSeedFieldFocused = false;
+    endlessActive = false;
+    endlessPromptActive = false;
+    endlessOperationWaiting = false;
     eventTimer = 0.0f;
     heapRaceSecondsRemaining = 0.0f;
     heapRaceTimeLimit = 60.0f;
+    endlessSurvivalTime = 0.0f;
+    endlessPromptSeconds = 0.0f;
+    endlessPromptLimit = 4.5f;
     message = "Starting demo";
 }
 
@@ -249,6 +262,133 @@ void GameApp::startOrderStatisticChallenge() {
     animationPlaying = true;
     highlightedNodeId = -1;
     message = "Find the 5th smallest key. Each node shows its subtree size.";
+}
+
+int GameApp::nextEndlessRandom() {
+    long long next = (long long)endlessRandomState * 48271LL % 2147483647LL;
+    endlessRandomState = (int)next;
+    return endlessRandomState;
+}
+
+void GameApp::startEndlessRun() {
+    currentLevelIndex = -1;
+    endlessSeed = (int)(GetTime() * 1000.0) + 1;
+    long long normalizedSeed = (long long)endlessSeed % 2147483646LL;
+    if (normalizedSeed <= 0) normalizedSeed += 2147483646LL;
+    endlessSeed = (int)normalizedSeed;
+    endlessRandomState = endlessSeed;
+    endlessScore = 0;
+    endlessLives = 3;
+    endlessOperations = 0;
+    endlessSurvivalTime = 0.0f;
+    endlessPromptSeconds = 0.0f;
+    endlessPromptLimit = 4.5f;
+    endlessActive = true;
+    endlessPromptActive = false;
+    endlessOperationWaiting = false;
+    events.clear();
+    EventLog setup;
+    if (!model.loadScenario(25, setup)) {
+        endlessActive = false;
+        message = model.statusText();
+        screenState = 0;
+        return;
+    }
+    screenState = 5;
+    animationPlaying = false;
+    currentEvent = -1;
+    nextEvent = 0;
+    highlightedNodeId = -1;
+    eventTimer = 0.0f;
+    refreshView();
+    makeEndlessPrompt();
+}
+
+void GameApp::makeEndlessPrompt() {
+    if (!endlessActive) return;
+    int treeSize = view.treeNodes.size();
+    if (treeSize < 3) endlessTargetAction = ACTION_INSERT;
+    else if (treeSize >= 14) endlessTargetAction = ACTION_DELETE;
+    else endlessTargetAction = nextEndlessRandom() % 2 == 0
+        ? ACTION_INSERT : ACTION_DELETE;
+
+    if (endlessTargetAction == ACTION_INSERT) {
+        int attempts = 0;
+        do {
+            endlessTargetKey = nextEndlessRandom() % 2001 - 1000;
+            attempts++;
+        } while (sandboxContainsKey(endlessTargetKey) && attempts < 200);
+        if (sandboxContainsKey(endlessTargetKey)) {
+            missEndlessPrompt("Could not choose a unique treasure key.");
+            return;
+        }
+    }
+    else {
+        if (treeSize <= 0) {
+            endlessTargetAction = ACTION_INSERT;
+            endlessTargetKey = nextEndlessRandom() % 2001 - 1000;
+        }
+        else {
+            int index = nextEndlessRandom() % treeSize;
+            endlessTargetKey = view.treeNodes[index].value;
+        }
+    }
+
+    endlessPromptLimit = 4.5f - (endlessSurvivalTime / 25.0f) * 0.5f;
+    if (endlessPromptLimit < 1.25f) endlessPromptLimit = 1.25f;
+    endlessPromptSeconds = endlessPromptLimit;
+    endlessPromptActive = true;
+    message = std::string("Incoming: ") +
+        (endlessTargetAction == ACTION_INSERT ? "INSERT " : "DELETE ") +
+        std::to_string(endlessTargetKey) + ". Choose the matching operation before time runs out.";
+}
+
+void GameApp::chooseEndlessOperation(int action) {
+    if (!endlessActive || !endlessPromptActive) return;
+    if (action != endlessTargetAction) {
+        missEndlessPrompt("Wrong operation. One life lost; a new order is coming.");
+        return;
+    }
+
+    EventLog operationEvents;
+    if (!model.performAction(action, endlessTargetKey, 0, operationEvents)) {
+        missEndlessPrompt(model.statusText());
+        return;
+    }
+    events.clear();
+    for (int i = 0; i < operationEvents.size(); i++) events.add(operationEvents.get(i));
+    endlessOperations++;
+    endlessPromptActive = false;
+    endlessOperationWaiting = true;
+    currentEvent = -1;
+    nextEvent = 0;
+    highlightedNodeId = -1;
+    eventTimer = 0.0f;
+    animationPlaying = true;
+    refreshView();
+    message = "Valid " + std::string(action == ACTION_INSERT ? "insert" : "delete") +
+        ". Review its events; the next order starts after playback.";
+}
+
+void GameApp::missEndlessPrompt(std::string reason) {
+    if (!endlessActive) return;
+    endlessLives--;
+    endlessPromptActive = false;
+    if (endlessLives <= 0) {
+        message = reason;
+        finishEndlessRun();
+        return;
+    }
+    message = reason;
+    makeEndlessPrompt();
+}
+
+void GameApp::finishEndlessRun() {
+    endlessActive = false;
+    endlessPromptActive = false;
+    endlessOperationWaiting = false;
+    endlessScore = (int)endlessSurvivalTime;
+    screenState = 6;
 }
 
 void GameApp::loadCurrentLevel() {
@@ -2260,6 +2400,11 @@ void GameApp::processInput() {
         else if (screenState == 4) {
             screenState = 0;
         }
+        else if (screenState == 5 || screenState == 6) {
+            endlessActive = false;
+            endlessPromptActive = false;
+            screenState = 0;
+        }
         return;
     }
 
@@ -2293,6 +2438,25 @@ void GameApp::processInput() {
         if (IsKeyPressed(KEY_ENTER)) {
             if (sandboxSeedFieldFocused) randomizeSandbox();
             else executeSandboxAction(sandboxAction);
+        }
+    }
+
+    if (screenState == 5) {
+        if (IsKeyPressed(KEY_SPACE)) {
+            animationPlaying = !animationPlaying;
+            return;
+        }
+        if (IsKeyPressed(KEY_LEFT)) {
+            stepPlayback(-1);
+            return;
+        }
+        if (IsKeyPressed(KEY_RIGHT)) {
+            stepPlayback(1);
+            return;
+        }
+        if (IsKeyPressed(KEY_R)) {
+            restartPlayback();
+            return;
         }
     }
 
@@ -2375,6 +2539,9 @@ void GameApp::processInput() {
             sandboxSeedFieldFocused = false;
             runAction(0, 0, 0);
             selectSandboxStructure(sandboxStructureType);
+        }
+        else if (CheckCollisionPointRec(mouse, Rectangle{ 490, 468, 300, 58 })) {
+            startEndlessRun();
         }
         return;
     }
@@ -2509,6 +2676,44 @@ void GameApp::processInput() {
                 highlightedNodeId = positions[i].id;
                 break;
             }
+        }
+        return;
+    }
+
+    if (screenState == 5) {
+        if (CheckCollisionPointRec(mouse, Rectangle{ 285, 82, 82, 38 })) {
+            restartPlayback();
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 375, 82, 70, 38 })) {
+            stepPlayback(-1);
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 453, 82, 82, 38 })) {
+            animationPlaying = !animationPlaying;
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 543, 82, 70, 38 })) {
+            stepPlayback(1);
+            return;
+        }
+        if (endlessPromptActive && !animationPlaying) {
+            if (CheckCollisionPointRec(mouse, Rectangle{ 24, 282, 210, 46 })) {
+                chooseEndlessOperation(ACTION_INSERT);
+            }
+            else if (CheckCollisionPointRec(mouse, Rectangle{ 24, 340, 210, 46 })) {
+                chooseEndlessOperation(ACTION_DELETE);
+            }
+        }
+        return;
+    }
+
+    if (screenState == 6) {
+        if (CheckCollisionPointRec(mouse, Rectangle{ 390, 560, 220, 52 })) {
+            startEndlessRun();
+        }
+        else if (CheckCollisionPointRec(mouse, Rectangle{ 650, 560, 220, 52 })) {
+            screenState = 0;
         }
         return;
     }
@@ -2934,6 +3139,19 @@ void GameApp::update(float deltaTime) {
         }
     }
 
+    if (screenState == 5 && endlessActive) {
+        endlessSurvivalTime += deltaTime;
+        endlessScore = (int)endlessSurvivalTime;
+        if (endlessPromptActive) {
+            endlessPromptSeconds -= deltaTime;
+            if (endlessPromptSeconds <= 0.0f) {
+                endlessPromptSeconds = 0.0f;
+                missEndlessPrompt("Order timed out. One life lost; a new order is coming.");
+                if (screenState == 6) return;
+            }
+        }
+    }
+
     if (mirrorAnimationActive) {
         mirrorAnimationTime += deltaTime;
         float progress = mirrorAnimationTime / 0.9f;
@@ -2999,6 +3217,11 @@ void GameApp::update(float deltaTime) {
                 }
                 return;
             }
+            if (screenState == 5 && endlessOperationWaiting) {
+                endlessOperationWaiting = false;
+                makeEndlessPrompt();
+                return;
+            }
         }
         eventTimer = 0.0f;
     }
@@ -3024,6 +3247,16 @@ void GameApp::draw() {
     }
     if (screenState == 4) {
         drawSandbox();
+        EndDrawing();
+        return;
+    }
+    if (screenState == 5) {
+        drawEndlessMode();
+        EndDrawing();
+        return;
+    }
+    if (screenState == 6) {
+        drawEndlessResult();
         EndDrawing();
         return;
     }
@@ -3076,12 +3309,74 @@ void GameApp::drawMainMenu() {
     DrawText("A data structures heist", 480, 240, 22, Color{ 175, 190, 210, 255 });
     drawButton(Rectangle{ 490, 320, 300, 58 }, "Campaign", true);
     drawButton(Rectangle{ 490, 394, 300, 58 }, "Sandbox", true);
-    DrawText("Choose a mode to enter the vault.", 474, 490, 18,
+    drawButton(Rectangle{ 490, 468, 300, 58 }, "Endless survival", true);
+    DrawText("Choose a mode to enter the vault.", 474, 550, 18,
         Color{ 150, 165, 185, 255 });
     if (levelManager.count() == 0) {
-        DrawText("Level data failed to load: data/levels.json", 390, 550, 18,
+        DrawText("Level data failed to load: data/levels.json", 390, 595, 18,
             Color{ 220, 135, 115, 255 });
     }
+}
+
+void GameApp::drawEndlessMode() {
+    DrawText("VAULT HEIST - ENDLESS", 24, 22, 30, Color{ 240, 220, 170, 255 });
+    DrawText("Keep the BST valid while the operation stream speeds up.",
+        285, 54, 16, Color{ 175, 190, 210, 255 });
+    drawPlaybackControls();
+    DrawLine(260, 80, 260, windowHeight - 24, Color{ 62, 76, 96, 255 });
+
+    DrawText("SURVIVAL SCORE", 24, 92, 14, Color{ 150, 175, 205, 255 });
+    DrawText(TextFormat("%i seconds", endlessScore), 24, 114, 22,
+        Color{ 240, 220, 170, 255 });
+    DrawText(TextFormat("Lives: %i / 3", endlessLives), 24, 150, 17,
+        Color{ 220, 224, 230, 255 });
+    DrawText(TextFormat("Valid operations: %i", endlessOperations), 24, 176, 15,
+        Color{ 205, 212, 224, 255 });
+    DrawText(TextFormat("Seed: %i", endlessSeed), 24, 200, 13,
+        Color{ 150, 165, 185, 255 });
+
+    if (endlessPromptActive) {
+        DrawText("INCOMING OPERATION", 24, 232, 14,
+            Color{ 240, 220, 170, 255 });
+        std::string prompt = endlessTargetAction == ACTION_INSERT
+            ? "Insert " : "Delete ";
+        prompt += std::to_string(endlessTargetKey);
+        DrawText(prompt.c_str(), 24, 252, 18, Color{ 230, 235, 242, 255 });
+        DrawRectangle(24, 267, 210, 8, Color{ 58, 66, 78, 255 });
+        int fill = endlessPromptLimit > 0.0f
+            ? (int)(210.0f * endlessPromptSeconds / endlessPromptLimit) : 0;
+        if (fill < 0) fill = 0;
+        if (fill > 210) fill = 210;
+        DrawRectangle(24, 267, fill, 8, Color{ 216, 117, 73, 255 });
+    }
+    else if (endlessOperationWaiting) {
+        DrawText("Review the event playback.", 24, 246, 14,
+            Color{ 205, 212, 224, 255 });
+    }
+    drawButton(Rectangle{ 24, 282, 210, 46 }, "Insert requested key",
+        endlessPromptActive && !animationPlaying);
+    drawButton(Rectangle{ 24, 340, 210, 46 }, "Delete requested key",
+        endlessPromptActive && !animationPlaying);
+    DrawText("Three missed orders end the run.", 24, 398, 13,
+        Color{ 150, 165, 185, 255 });
+    drawTree();
+    drawEventLog();
+    DrawText(message.c_str(), 285, windowHeight - 42, 18,
+        Color{ 220, 224, 230, 255 });
+}
+
+void GameApp::drawEndlessResult() {
+    DrawText("ENDLESS RUN OVER", 380, 170, 36, Color{ 240, 220, 170, 255 });
+    DrawText("The vault doors closed.", 450, 238, 24,
+        Color{ 220, 135, 115, 255 });
+    DrawText(TextFormat("Survival time: %i seconds", endlessScore), 420, 315, 22,
+        Color{ 240, 220, 170, 255 });
+    DrawText(TextFormat("Valid operations: %i", endlessOperations), 420, 355, 20,
+        Color{ 220, 224, 230, 255 });
+    DrawText(TextFormat("Seed: %i", endlessSeed), 420, 392, 17,
+        Color{ 150, 165, 185, 255 });
+    drawButton(Rectangle{ 390, 560, 220, 52 }, "Play again", true);
+    drawButton(Rectangle{ 650, 560, 220, 52 }, "Main menu", true);
 }
 
 void GameApp::drawSandbox() {
