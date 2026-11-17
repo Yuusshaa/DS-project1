@@ -107,6 +107,16 @@ default value from `Event`.
 - The GUI handles selection and scoring; the model owns validation and all heap-value changes.
 - Yusha's real facade must dispatch actions 22 and 23 and load scenario 4 before integration.
 
+## Act 4.2 heapify repair
+
+- Scenario 5 is `{4, 9, 8, 7, 3, 5, 2, 1}` with a violation at root index 0; the child subtrees
+  are already max heaps.
+- `ACTION_HEAPIFY` (10) takes the start index in `value` and sifts that item down through the
+  active heap. It emits `EV_HEAPIFY_START`, any `EV_HEAP_SWAP` operations, and
+  `EV_HEAPIFY_DONE`. Heap swap events identify array indexes in `nodeId` and `otherId`.
+- Act 4.2 completes when the GUI queries `ACTION_IS_MAX_HEAP` and receives `EV_DONE.value = 1`.
+- Scenario 5 and action 10 must be supported by Yusha's model facade before integration.
+
 ## Public model interface to finalize
 
 Before the GUI calls model operations, Yusha records exact class names,

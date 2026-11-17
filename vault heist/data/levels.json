@@ -177,8 +177,12 @@
       "number": 2,
       "title": "Repair Security Locks",
       "concept": "heapify",
-      "objective": "Restore the heap property.",
-      "implemented": false
+      "objective": "Identify the violating parent and sift its value down to restore heap order.",
+      "scenarioId": 5,
+      "targetValue": 0,
+      "optimalSteps": 1,
+      "alarmCapacity": 4,
+      "implemented": true
     },
     {
       "act": 4,

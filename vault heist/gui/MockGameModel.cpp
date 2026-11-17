@@ -165,6 +165,16 @@ bool MockGameModel::loadScenario(int scenarioId, EventLog& events) {
         return true;
     }
 
+    if (scenarioId == 5) {
+        int values[8] = { 4, 9, 8, 7, 3, 5, 2, 1 };
+        view.viewType = MODEL_VIEW_HEAP;
+        view.heapSize = 8;
+        for (int i = 0; i < 8; i++) view.heapValues.push(values[i]);
+        message = "Disturbed max heap loaded; sift down from the violating root";
+        events.clear();
+        return true;
+    }
+
     if (scenarioId == 31) {
         ViewNode node;
         node.id = 1; node.value = 50; node.leftId = 2; node.rightId = 3;
@@ -678,6 +688,41 @@ bool MockGameModel::performAction(int action, int value, int secondValue,
         swapped.code = 0;
         events.add(swapped);
         message = "Valid parent-child swap";
+    }
+    else if (action == ACTION_HEAPIFY) {
+        int start = value;
+        if (start < 0 || start >= view.heapSize) {
+            message = "Heapify index is outside the active heap";
+            return false;
+        }
+        Event started;
+        started.type = EV_HEAPIFY_START;
+        started.nodeId = start;
+        events.add(started);
+        int current = start;
+        while (true) {
+            int left = current * 2 + 1;
+            int right = current * 2 + 2;
+            int largest = current;
+            if (left < view.heapSize && view.heapValues[left] > view.heapValues[largest]) largest = left;
+            if (right < view.heapSize && view.heapValues[right] > view.heapValues[largest]) largest = right;
+            if (largest == current) break;
+            int temp = view.heapValues[current];
+            view.heapValues[current] = view.heapValues[largest];
+            view.heapValues[largest] = temp;
+            Event swapped;
+            swapped.type = EV_HEAP_SWAP;
+            swapped.nodeId = current;
+            swapped.otherId = largest;
+            swapped.value = view.heapValues[current];
+            events.add(swapped);
+            current = largest;
+        }
+        Event finished;
+        finished.type = EV_HEAPIFY_DONE;
+        finished.nodeId = start;
+        events.add(finished);
+        message = "Sift-down complete";
     }
     else if (action == ACTION_IS_MAX_HEAP) {
         bool valid = true;

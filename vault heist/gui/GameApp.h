@@ -79,6 +79,10 @@ private:
     int selectedHeapIndex;
     int heapBuildSwaps;
     int heapBuildOptimalSteps;
+    int heapifyStartIndex;
+    int heapifyOperationCount;
+    int heapifyOptimalSteps;
+    int heapCompletionType;
     int heightOptimalSteps;         // Act 1.3: rooms + 1 diameter report
     int expectedDeleteCase;
     int rangeLow;
@@ -101,6 +105,9 @@ private:
     bool mirrorAnimationActive;
     bool rotationChallenge;
     bool heapBuildChallenge;
+    bool heapifyChallenge;
+    bool heapCompletionPending;
+    bool heapCompletionReady;
     bool animationPlaying;
     bool sandboxSecondFieldFocused;
     float eventTimer;
@@ -136,6 +143,8 @@ private:
     void finishRotationChallenge(bool success);
     void startHeapBuildChallenge();
     void finishHeapBuildChallenge(bool success);
+    void startHeapifyChallenge();
+    void finishHeapifyChallenge(bool success);
     int enteredHeightFor(int id);
     bool isLevel(int act, int number);
     void drawHeightPanel();
@@ -157,6 +166,7 @@ private:
     void drawSandbox();
     void drawHeapView();
     void drawHeapControls();
+    void drawHeapifyControls();
     void executeSandboxAction(int action);
     void restartPlayback();
     void stepPlayback(int direction);

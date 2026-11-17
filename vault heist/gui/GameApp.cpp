@@ -42,6 +42,10 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     selectedHeapIndex = -1;
     heapBuildSwaps = 0;
     heapBuildOptimalSteps = 4;
+    heapifyStartIndex = -1;
+    heapifyOperationCount = 0;
+    heapifyOptimalSteps = 1;
+    heapCompletionType = 0;
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
     heightOptimalSteps = 0;
@@ -65,6 +69,9 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
     lcaChallenge = false;
     rotationChallenge = false;
     heapBuildChallenge = false;
+    heapifyChallenge = false;
+    heapCompletionPending = false;
+    heapCompletionReady = false;
     animationPlaying = true;
     sandboxSecondFieldFocused = false;
     eventTimer = 0.0f;
@@ -105,7 +112,14 @@ void GameApp::runAction(int action, int value, int secondValue) {
     lcaChallenge = false;
     rotationChallenge = false;
     heapBuildChallenge = false;
+    heapifyChallenge = false;
+    heapCompletionPending = false;
+    heapCompletionReady = false;
     selectedHeapIndex = -1;
+    if (action == 0) {
+        heapBuildSwaps = 0;
+        heapifyOperationCount = 0;
+    }
     mirrorAnimationActive = false;
     mirrorAnimationTime = 0.0f;
     heightPhase = 0;
@@ -1015,6 +1029,17 @@ void GameApp::finishHeapBuildChallenge(bool success) {
     challengeActive = false;
     challengeFinished = true;
     selectedHeapIndex = -1;
+    if (success && !heapCompletionReady) {
+        heapCompletionPending = true;
+        heapCompletionType = 1;
+        animationPlaying = true;
+        currentEvent = -1;
+        nextEvent = 0;
+        eventTimer = 0.0f;
+        message = "Heap property restored. Reviewing the swap events...";
+        return;
+    }
+    heapCompletionReady = false;
     if (success && alarmSteps < alarmCapacity) {
         if (wrongClicks == 0 && alarmSteps <= heapBuildOptimalSteps) stars = 3;
         else if (wrongClicks <= 1 && alarmSteps * 4 <= heapBuildOptimalSteps * 5) stars = 2;
@@ -1027,6 +1052,69 @@ void GameApp::finishHeapBuildChallenge(bool success) {
         stars = 0;
         score = 0;
         message = "Alarm full. Heap construction failed - retry.";
+    }
+    levelManager.recordResult(currentLevelIndex, stars, score);
+    levelManager.saveProgress("campaign_progress.dat");
+    screenState = 3;
+}
+
+void GameApp::startHeapifyChallenge() {
+    if (!isLevel(4, 2)) return;
+    LevelDefinition& level = levelManager.getLevel(currentLevelIndex);
+    EventLog setup;
+    if (!model.loadScenario(level.scenarioId, setup)) {
+        message = model.statusText();
+        return;
+    }
+    refreshView();
+    events.clear();
+    currentEvent = -1;
+    nextEvent = 0;
+    heapifyStartIndex = level.targetValue;
+    heapifyOperationCount = 0;
+    heapifyOptimalSteps = level.optimalSteps > 0 ? level.optimalSteps : 1;
+    alarmCapacity = level.alarmCapacity > 0 ? level.alarmCapacity :
+        (3 * heapifyOptimalSteps + 1) / 2 + 2;
+    alarmSteps = 0;
+    wrongClicks = 0;
+    stars = 0;
+    score = 0;
+    selectedHeapIndex = -1;
+    heapifyChallenge = true;
+    challengeActive = true;
+    challengeFinished = false;
+    animationPlaying = false;
+    message = "Find the violating parent, then click its array cell to sift down.";
+}
+
+void GameApp::finishHeapifyChallenge(bool success) {
+    heapifyChallenge = false;
+    challengeActive = false;
+    challengeFinished = true;
+    selectedHeapIndex = -1;
+    if (success && !heapCompletionReady) {
+        heapCompletionPending = true;
+        heapCompletionType = 2;
+        animationPlaying = true;
+        currentEvent = -1;
+        nextEvent = 0;
+        eventTimer = 0.0f;
+        message = "Heap property restored. Reviewing the heapify events...";
+        return;
+    }
+    heapCompletionReady = false;
+    if (success && alarmSteps < alarmCapacity) {
+        if (wrongClicks == 0 && alarmSteps <= heapifyOptimalSteps) stars = 3;
+        else if (wrongClicks <= 1 && alarmSteps * 4 <= heapifyOptimalSteps * 5) stars = 2;
+        else stars = 1;
+        score = 1000 - 10 * alarmSteps - 50 * wrongClicks;
+        if (score < 0) score = 0;
+        message = "Security heap restored. The max-heap property holds.";
+    }
+    else {
+        stars = 0;
+        score = 0;
+        message = "Alarm full. Heap repair failed - retry.";
     }
     levelManager.recordResult(currentLevelIndex, stars, score);
     levelManager.saveProgress("campaign_progress.dat");
@@ -1540,6 +1628,7 @@ void GameApp::copyViewData(ModelView& source, ModelView& destination) {
 }
 
 void GameApp::processInput() {
+    if (screenState == 2 && heapCompletionPending && IsKeyPressed(KEY_ESCAPE)) return;
     if (IsKeyPressed(KEY_ESCAPE)) {
         if (mirrorAnimationActive) runAction(0, 0, 0);
         if (screenState == 2 || screenState == 3) {
@@ -1754,7 +1843,71 @@ void GameApp::processInput() {
     bool isMirrorLevel = isLevel(1, 5);
     bool isRotationLevel = isLevel(3, 2) || isLevel(3, 3);
     bool isHeapBuildLevel = isLevel(4, 1);
+    bool isHeapifyLevel = isLevel(4, 2);
+    if (isHeapifyLevel) {
+        if (heapCompletionPending) return;
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
+            startHeapifyChallenge();
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 20, 132, 220, 42 })) {
+            runAction(0, 0, 0);
+            return;
+        }
+        if (heapifyChallenge && mouse.y >= 665 && mouse.y <= 713) {
+            int cellWidth = 72;
+            int gap = 8;
+            int activeSize = view.heapSize;
+            if (activeSize < 0) activeSize = 0;
+            if (activeSize > view.heapValues.size()) activeSize = view.heapValues.size();
+            if (activeSize > 0 && activeSize * (cellWidth + gap) > windowWidth - 320) {
+                cellWidth = (windowWidth - 320) / activeSize - gap;
+                if (cellWidth < 30) cellWidth = 30;
+            }
+            int index = ((int)mouse.x - 290) / (cellWidth + gap);
+            int cellX = 290 + index * (cellWidth + gap);
+            if (index >= 0 && index < activeSize && mouse.x >= cellX && mouse.x <= cellX + cellWidth) {
+                if (index != heapifyStartIndex) {
+                    alarmSteps++;
+                    wrongClicks++;
+                    message = "Wrong array cell (+1 alarm). Find a parent smaller than a child.";
+                    if (alarmSteps >= alarmCapacity) finishHeapifyChallenge(false);
+                    return;
+                }
+                selectedHeapIndex = index;
+                EventLog repairEvents;
+                bool repaired = model.performAction(ACTION_HEAPIFY, index, 0, repairEvents);
+                if (!repaired) {
+                    alarmSteps++;
+                    wrongClicks++;
+                    message = model.statusText();
+                    if (alarmSteps >= alarmCapacity) finishHeapifyChallenge(false);
+                    return;
+                }
+                heapifyOperationCount++;
+                alarmSteps++;
+                for (int i = 0; i < repairEvents.size(); i++) events.add(repairEvents.get(i));
+                refreshView();
+                currentEvent = events.size() - 1;
+                nextEvent = events.size();
+                EventLog checkEvents;
+                model.performAction(ACTION_IS_MAX_HEAP, 0, 0, checkEvents);
+                bool complete = false;
+                for (int i = 0; i < checkEvents.size(); i++) {
+                    if (checkEvents.get(i).type == EV_DONE && checkEvents.get(i).value == 1) complete = true;
+                }
+                if (complete) {
+                    for (int i = 0; i < checkEvents.size(); i++) events.add(checkEvents.get(i));
+                    finishHeapifyChallenge(true);
+                }
+                else message = "That subtree is sifted. Find and repair the remaining violation.";
+                return;
+            }
+        }
+        return;
+    }
     if (isHeapBuildLevel) {
+        if (heapCompletionPending) return;
         if (CheckCollisionPointRec(mouse, Rectangle{ 20, 82, 220, 42 })) {
             startHeapBuildChallenge();
             return;
@@ -1981,6 +2134,13 @@ void GameApp::update(float deltaTime) {
         }
         else {
             animationPlaying = false;
+            if (heapCompletionPending) {
+                heapCompletionPending = false;
+                heapCompletionReady = true;
+                if (heapCompletionType == 1) finishHeapBuildChallenge(true);
+                else finishHeapifyChallenge(true);
+                return;
+            }
         }
         eventTimer = 0.0f;
     }
@@ -2017,7 +2177,8 @@ void GameApp::draw() {
     DrawLine(260, 80, 260, windowHeight - 24, Color{ 62, 76, 96, 255 });
 
     if (view.viewType == MODEL_VIEW_HEAP) {
-        drawHeapControls();
+        if (isLevel(4, 2)) drawHeapifyControls();
+        else drawHeapControls();
         drawHeapView();
     }
     else {
@@ -2595,6 +2756,27 @@ void GameApp::drawHeapControls() {
     DrawText(TextFormat("%i / %i steps", alarmSteps, capacity), 24, 451, 15,
         Color{ 205, 212, 224, 255 });
     DrawText(TextFormat("Wrong swaps: %i", wrongClicks), 24, 478, 15,
+        Color{ 205, 212, 224, 255 });
+}
+
+void GameApp::drawHeapifyControls() {
+    DrawText("ACT 4.2 - REPAIR THE HEAP", 24, 55, 15, Color{ 150, 175, 205, 255 });
+    drawButton(Rectangle{ 20, 82, 220, 42 }, "Start heap repair", true);
+    drawButton(Rectangle{ 20, 132, 220, 42 }, "Reset level", true);
+    DrawText("Find a parent smaller than", 20, 190, 13, Color{ 205, 212, 224, 255 });
+    DrawText("a child, then click its array", 20, 210, 13, Color{ 205, 212, 224, 255 });
+    DrawText("cell to heapify that subtree.", 20, 230, 13, Color{ 205, 212, 224, 255 });
+    DrawText(TextFormat("Heapify operations: %i", heapifyOperationCount),
+        20, 260, 14, Color{ 205, 212, 224, 255 });
+    DrawText("ALARM", 24, 405, 15, Color{ 150, 175, 205, 255 });
+    int capacity = alarmCapacity > 0 ? alarmCapacity : 10;
+    int alarm = alarmSteps > capacity ? capacity : alarmSteps;
+    DrawRectangle(24, 430, 210, 14, Color{ 58, 66, 78, 255 });
+    DrawRectangle(24, 430, 210 * alarm / capacity, 14,
+        Color{ 216, 117, 73, 255 });
+    DrawText(TextFormat("%i / %i steps", alarmSteps, capacity), 24, 451, 15,
+        Color{ 205, 212, 224, 255 });
+    DrawText(TextFormat("Wrong selections: %i", wrongClicks), 24, 478, 15,
         Color{ 205, 212, 224, 255 });
 }
 
