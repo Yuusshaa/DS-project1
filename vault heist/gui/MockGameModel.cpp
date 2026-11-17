@@ -1,5 +1,9 @@
 #include "MockGameModel.h"
 
+#include <cctype>
+#include <climits>
+#include <cstdlib>
+
 MockGameModel::MockGameModel() {
     message = "Mock model ready";
     avlMode = false;
@@ -1331,4 +1335,129 @@ void MockGameModel::copyView(ModelView& output) {
 
 std::string MockGameModel::statusText() {
     return message;
+}
+
+std::string MockGameModel::serialize() {
+    std::string output = "MOCK1 ";
+    auto appendInt = [&output](int value) {
+        output += std::to_string(value);
+        output += ' ';
+    };
+    appendInt(view.viewType);
+    appendInt(avlMode ? 1 : 0);
+    appendInt(view.heapSize);
+    appendInt(view.treeNodes.size());
+    appendInt(view.heapValues.size());
+    for (int i = 0; i < view.treeNodes.size(); i++) {
+        ViewNode& node = view.treeNodes[i];
+        appendInt(node.id);
+        appendInt(node.value);
+        appendInt(node.leftId);
+        appendInt(node.rightId);
+        appendInt(node.parentId);
+        appendInt(node.height);
+        appendInt(node.size);
+    }
+    for (int i = 0; i < view.heapValues.size(); i++) {
+        appendInt(view.heapValues[i]);
+    }
+    return output;
+}
+
+bool MockGameModel::deserialize(const std::string& data) {
+    const char* cursor = data.c_str();
+    auto skipSpaces = [&cursor]() {
+        while (*cursor != '\0' && std::isspace((unsigned char)*cursor)) cursor++;
+    };
+    skipSpaces();
+    const char* versionStart = cursor;
+    while (*cursor != '\0' && !std::isspace((unsigned char)*cursor)) cursor++;
+    std::string version(versionStart, (std::size_t)(cursor - versionStart));
+    auto readInt = [&cursor, &skipSpaces](int& value) {
+        skipSpaces();
+        char* end = nullptr;
+        long parsed = std::strtol(cursor, &end, 10);
+        if (end == cursor || parsed < INT_MIN || parsed > INT_MAX ||
+            (*end != '\0' && !std::isspace((unsigned char)*end))) return false;
+        value = (int)parsed;
+        cursor = end;
+        return true;
+    };
+    int viewType = MODEL_VIEW_TREE;
+    int restoredAvlMode = 0;
+    int heapSize = 0;
+    int nodeCount = 0;
+    int heapCount = 0;
+    if (!readInt(viewType) || !readInt(restoredAvlMode) || !readInt(heapSize) ||
+        !readInt(nodeCount) || !readInt(heapCount) ||
+        version != "MOCK1" || (viewType != MODEL_VIEW_TREE && viewType != MODEL_VIEW_HEAP) ||
+        (restoredAvlMode != 0 && restoredAvlMode != 1) || heapSize < 0 ||
+        nodeCount < 0 || nodeCount > 1000 || heapCount < 0 || heapCount > 1000 ||
+        heapSize > heapCount || (viewType == MODEL_VIEW_TREE && heapCount != 0) ||
+        (viewType == MODEL_VIEW_HEAP && nodeCount != 0)) {
+        message = "Invalid mock snapshot";
+        return false;
+    }
+
+    ModelView restored;
+    restored.viewType = viewType;
+    restored.heapSize = heapSize;
+    for (int i = 0; i < nodeCount; i++) {
+        ViewNode node;
+        if (!readInt(node.id) || !readInt(node.value) || !readInt(node.leftId) ||
+            !readInt(node.rightId) || !readInt(node.parentId) ||
+            !readInt(node.height) || !readInt(node.size) || node.id < 0) {
+            message = "Invalid mock snapshot";
+            return false;
+        }
+        for (int previous = 0; previous < restored.treeNodes.size(); previous++) {
+            if (restored.treeNodes[previous].id == node.id) {
+                message = "Snapshot contains duplicate node IDs";
+                return false;
+            }
+        }
+        restored.treeNodes.push(node);
+    }
+    for (int i = 0; i < heapCount; i++) {
+        int value = 0;
+        if (!readInt(value)) {
+            message = "Invalid mock snapshot";
+            return false;
+        }
+        restored.heapValues.push(value);
+    }
+    skipSpaces();
+    if (*cursor != '\0') {
+        message = "Snapshot contains unexpected data";
+        return false;
+    }
+
+    for (int i = 0; i < restored.treeNodes.size(); i++) {
+        ViewNode& node = restored.treeNodes[i];
+        for (int link = 0; link < 3; link++) {
+            int linkedId = link == 0 ? node.leftId : link == 1 ? node.rightId : node.parentId;
+            if (linkedId < 0) continue;
+            bool found = false;
+            for (int j = 0; j < restored.treeNodes.size(); j++) {
+                if (restored.treeNodes[j].id == linkedId) found = true;
+            }
+            if (!found) {
+                message = "Snapshot contains a broken tree link";
+                return false;
+            }
+        }
+    }
+
+    view.clear();
+    view.viewType = restored.viewType;
+    view.heapSize = restored.heapSize;
+    for (int i = 0; i < restored.treeNodes.size(); i++) {
+        view.treeNodes.push(restored.treeNodes[i]);
+    }
+    for (int i = 0; i < restored.heapValues.size(); i++) {
+        view.heapValues.push(restored.heapValues[i]);
+    }
+    avlMode = restoredAvlMode != 0;
+    message = "Snapshot restored";
+    return true;
 }

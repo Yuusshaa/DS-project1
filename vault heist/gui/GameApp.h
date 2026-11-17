@@ -40,6 +40,8 @@ private:
     DynArray<int> expectedCompareCodes;
     DynArray<int> skippedSubtreeRoots;
     DynArray<int> balanceFound;
+    DynArray<std::string> sandboxUndoHistory;
+    DynArray<std::string> sandboxRedoHistory;
     DynArray<int> enteredHeights;   // Act 1.3: answer given per postorder room, -1 = not yet
     DynArray<EndlessRecord> endlessLeaderboard;
     DynArray<GuiNodePosition> positions;
@@ -270,6 +272,11 @@ private:
     void drawReconstructionChallenge();
     void drawAvlPredictionControls();
     void executeSandboxAction(int action);
+    bool sandboxActionMutates(int action);
+    void pushSandboxUndoSnapshot();
+    void undoSandboxAction();
+    void redoSandboxAction();
+    void clearSandboxHistory();
     void restartPlayback();
     void stepPlayback(int direction);
     std::string describeEvent(Event& event);

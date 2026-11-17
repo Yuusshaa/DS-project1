@@ -80,4 +80,6 @@ public:
         EventLog& events) = 0;
     virtual void copyView(ModelView& output) = 0;
     virtual std::string statusText() = 0;
+    virtual std::string serialize() = 0;
+    virtual bool deserialize(const std::string& data) = 0;
 };

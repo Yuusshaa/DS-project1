@@ -30,4 +30,6 @@ public:
         EventLog& events);
     void copyView(ModelView& output);
     std::string statusText();
+    std::string serialize() override;
+    bool deserialize(const std::string& data) override;
 };

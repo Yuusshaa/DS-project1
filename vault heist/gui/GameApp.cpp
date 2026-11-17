@@ -2699,6 +2699,14 @@ void GameApp::processInput() {
     }
 
     if (screenState == 4) {
+        if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_Z)) {
+            undoSandboxAction();
+            return;
+        }
+        if (IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_Y)) {
+            redoSandboxAction();
+            return;
+        }
         if (IsKeyPressed(KEY_SPACE)) {
             animationPlaying = !animationPlaying;
             return;
@@ -2794,6 +2802,14 @@ void GameApp::processInput() {
     }
 
     if (screenState == 4) {
+        if (CheckCollisionPointRec(mouse, Rectangle{ 640, 82, 82, 38 })) {
+            undoSandboxAction();
+            return;
+        }
+        if (CheckCollisionPointRec(mouse, Rectangle{ 730, 82, 82, 38 })) {
+            redoSandboxAction();
+            return;
+        }
         if (CheckCollisionPointRec(mouse, Rectangle{ 285, 82, 82, 38 })) {
             restartPlayback();
             return;
@@ -3636,6 +3652,8 @@ void GameApp::drawSandbox() {
     DrawText("Choose a structure and build a repeatable random setup", 285, 54, 16,
         Color{ 175, 190, 210, 255 });
     drawPlaybackControls();
+    drawButton(Rectangle{ 640, 82, 82, 38 }, "Undo", !sandboxUndoHistory.empty());
+    drawButton(Rectangle{ 730, 82, 82, 38 }, "Redo", !sandboxRedoHistory.empty());
     DrawLine(260, 80, 260, windowHeight - 24, Color{ 62, 76, 96, 255 });
 
     DrawText("STRUCTURE", 24, 82, 14, Color{ 150, 175, 205, 255 });
@@ -3735,6 +3753,7 @@ void GameApp::selectSandboxStructure(int structureType) {
         message = model.statusText();
         return;
     }
+    clearSandboxHistory();
     sandboxValueInput.clear();
     sandboxSecondInput.clear();
     sandboxSeedFieldFocused = false;
@@ -3786,6 +3805,7 @@ void GameApp::randomizeSandbox() {
     if (normalizedSeed <= 0) normalizedSeed += 2147483646LL;
     sandboxRandomState = (int)normalizedSeed;
     sandboxSeed = (int)normalizedSeed;
+    clearSandboxHistory();
     sandboxSeedFieldFocused = false;
     sandboxSecondFieldFocused = false;
     events.clear();
@@ -3887,6 +3907,7 @@ void GameApp::executeSandboxAction(int action) {
     bool takesSecondValue = action == ACTION_RANGE_QUERY ||
         action == ACTION_LCA || action == ACTION_HEAP_SWAP;
     if (!takesValue) {
+        if (sandboxActionMutates(action)) pushSandboxUndoSnapshot();
         runAction(action, 0, 0);
         return;
     }
@@ -3911,7 +3932,92 @@ void GameApp::executeSandboxAction(int action) {
         message = "Range low value must be less than or equal to high value.";
         return;
     }
+    if (sandboxActionMutates(action)) pushSandboxUndoSnapshot();
     runAction(action, value, secondValue);
+}
+
+bool GameApp::sandboxActionMutates(int action) {
+    return action == ACTION_INSERT || action == ACTION_DELETE ||
+        action == ACTION_MIRROR || action == ACTION_ROTATE_LEFT ||
+        action == ACTION_ROTATE_RIGHT || action == ACTION_HEAP_BUILD ||
+        action == ACTION_HEAPIFY || action == ACTION_EXTRACT_MAX ||
+        action == ACTION_HEAP_SORT || action == ACTION_HEAP_SWAP;
+}
+
+void GameApp::pushSandboxUndoSnapshot() {
+    if (sandboxUndoHistory.size() >= 20) {
+        for (int i = 1; i < sandboxUndoHistory.size(); i++) {
+            sandboxUndoHistory[i - 1] = sandboxUndoHistory[i];
+        }
+        sandboxUndoHistory.pop();
+    }
+    sandboxUndoHistory.push(model.serialize());
+    sandboxRedoHistory.clear();
+}
+
+void GameApp::undoSandboxAction() {
+    if (screenState != 4 || sandboxUndoHistory.empty()) {
+        message = "No sandbox action to undo.";
+        return;
+    }
+    std::string current = model.serialize();
+    std::string previous = sandboxUndoHistory.pop();
+    if (!model.deserialize(previous)) {
+        sandboxUndoHistory.push(previous);
+        message = model.statusText();
+        return;
+    }
+    if (sandboxRedoHistory.size() >= 20) {
+        for (int i = 1; i < sandboxRedoHistory.size(); i++) {
+            sandboxRedoHistory[i - 1] = sandboxRedoHistory[i];
+        }
+        sandboxRedoHistory.pop();
+    }
+    sandboxRedoHistory.push(current);
+    events.clear();
+    currentEvent = -1;
+    nextEvent = 0;
+    highlightedNodeId = -1;
+    selectedHeapIndex = -1;
+    animationPlaying = false;
+    alarmSteps = 0;
+    refreshView();
+    message = "Undid the last structure-changing action.";
+}
+
+void GameApp::redoSandboxAction() {
+    if (screenState != 4 || sandboxRedoHistory.empty()) {
+        message = "No sandbox action to redo.";
+        return;
+    }
+    std::string current = model.serialize();
+    std::string next = sandboxRedoHistory.pop();
+    if (!model.deserialize(next)) {
+        sandboxRedoHistory.push(next);
+        message = model.statusText();
+        return;
+    }
+    if (sandboxUndoHistory.size() >= 20) {
+        for (int i = 1; i < sandboxUndoHistory.size(); i++) {
+            sandboxUndoHistory[i - 1] = sandboxUndoHistory[i];
+        }
+        sandboxUndoHistory.pop();
+    }
+    sandboxUndoHistory.push(current);
+    events.clear();
+    currentEvent = -1;
+    nextEvent = 0;
+    highlightedNodeId = -1;
+    selectedHeapIndex = -1;
+    animationPlaying = false;
+    alarmSteps = 0;
+    refreshView();
+    message = "Redid the sandbox action.";
+}
+
+void GameApp::clearSandboxHistory() {
+    sandboxUndoHistory.clear();
+    sandboxRedoHistory.clear();
 }
 
 int GameApp::sandboxOperationCount(int page) {

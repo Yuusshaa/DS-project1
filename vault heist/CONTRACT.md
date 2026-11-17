@@ -207,8 +207,11 @@ adjust the event contract before implementing that animation.
 - Hussain builds against `MockGameModel`, which implements the same interface.
   During integration, the app is constructed with Yusha's real implementation
   instead. The GUI source does not change for that swap.
-- `GameModel` has `loadScenario`, `performAction`, `copyView`, and
-  `statusText` methods. Action codes are documented integer macros, not enums.
+- `GameModel` has `loadScenario`, `performAction`, `copyView`, `statusText`,
+  `serialize`, and `deserialize` methods. Serialization captures the active
+  structure for snapshots; restoring a tree may assign new node IDs, so the
+  GUI refreshes its view and clears ID-based selections after restore. Action
+  codes are documented integer macros, not enums.
 - A model action receives the caller's `EventLog`, appends events in order, and
   ends its batch with `EV_DONE`. The GUI clears the log before requesting the
   next action.

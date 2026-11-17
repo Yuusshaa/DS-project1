@@ -67,6 +67,9 @@ msbuild VaultHeist.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64 /p:Pr
 - Use the **Read**, **Edit**, **AVL**, and **Heap** operation pages. The
   available operations depend on the selected structure; tree tooltips show
   node IDs for height and LCA queries.
+- In Sandbox, use **Undo** and **Redo** or press **Ctrl+Z** and **Ctrl+Y** to
+  move through the last 20 structure-changing operations. Restoring a tree may
+  assign new node IDs, so the GUI clears any old node selection.
 - Enter operation parameters in the two value fields; for range queries enter
   the high value second, and for LCA enter the second node ID. Press Enter to
   repeat the selected operation. **Reset selected structure** restores its
