@@ -5,6 +5,12 @@
 #include "GameModel.h"
 #include "LevelManager.h"
 
+struct EndlessRecord {
+    int seconds;
+    int operations;
+    int seed;
+};
+
 struct GuiNodePosition {
     int id;
     float x;
@@ -35,6 +41,7 @@ private:
     DynArray<int> skippedSubtreeRoots;
     DynArray<int> balanceFound;
     DynArray<int> enteredHeights;   // Act 1.3: answer given per postorder room, -1 = not yet
+    DynArray<EndlessRecord> endlessLeaderboard;
     DynArray<GuiNodePosition> positions;
     DynArray<GuiNodePosition> mirrorStartPositions;
     DynArray<GuiNodePosition> mirrorEndPositions;
@@ -47,7 +54,7 @@ private:
     std::string reconstructionSecondTraversal;
     int windowWidth;
     int windowHeight;
-    int screenState; // 0=menu, 1=campaign, 2=level, 3=result, 4=sandbox, 5=endless, 6=endless result
+    int screenState; // 0=menu, 1=campaign, 2=level, 3=result, 4=sandbox, 5=endless, 6=endless result, 7=leaderboard
     int activeAct;
     int currentLevelIndex;
     int currentEvent;
@@ -172,6 +179,10 @@ private:
     void drawMainMenu();
     void drawEndlessMode();
     void drawEndlessResult();
+    void drawLeaderboard();
+    void loadLeaderboard();
+    void recordEndlessScore();
+    void saveLeaderboard();
     void drawCampaignMap();
     void drawResultScreen();
     void drawButton(Rectangle bounds, std::string label, bool enabled);

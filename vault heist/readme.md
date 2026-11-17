@@ -49,6 +49,9 @@ msbuild VaultHeist.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64 /p:Pr
   Insert or Delete button before its timer expires; the prompt pace increases
   as you survive longer. Three missed operations end the run, and survival
   time is the score.
+- Open **Leaderboard** to view the ten best Endless runs on this computer.
+  Entries rank by survival time, then valid operations, and are saved in
+  `endless_leaderboard.dat` in the application's working directory.
 - Click a **Quiz** button to start that traversal challenge, then click rooms
   in the requested order.
 - Click **Search 60** to show a sample BST search path.

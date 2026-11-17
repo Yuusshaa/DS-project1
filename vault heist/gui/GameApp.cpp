@@ -136,6 +136,7 @@ GameApp::GameApp(GameModel& gameModel) : model(gameModel) {
 void GameApp::run() {
     InitWindow(windowWidth, windowHeight, "Vault Heist - Tree Lab");
     SetTargetFPS(60);
+    loadLeaderboard();
     if (levelManager.loadFromJson("data/levels.json")) {
         levelManager.loadProgress("campaign_progress.dat");
         currentLevelIndex = levelManager.findLevel(1, 1);
@@ -388,7 +389,67 @@ void GameApp::finishEndlessRun() {
     endlessPromptActive = false;
     endlessOperationWaiting = false;
     endlessScore = (int)endlessSurvivalTime;
+    recordEndlessScore();
     screenState = 6;
+}
+
+void GameApp::loadLeaderboard() {
+    endlessLeaderboard.clear();
+    FILE* file = std::fopen("endless_leaderboard.dat", "r");
+    if (file == nullptr) return;
+
+    int seconds = 0;
+    int operations = 0;
+    int seed = 0;
+    while (std::fscanf(file, "%d %d %d", &seconds, &operations, &seed) == 3) {
+        if (seconds < 0 || operations < 0) continue;
+        EndlessRecord record{ seconds, operations, seed };
+        endlessLeaderboard.push(record);
+    }
+    std::fclose(file);
+
+    for (int i = 0; i < endlessLeaderboard.size(); i++) {
+        for (int j = i + 1; j < endlessLeaderboard.size(); j++) {
+            EndlessRecord& left = endlessLeaderboard[i];
+            EndlessRecord& right = endlessLeaderboard[j];
+            if (right.seconds > left.seconds ||
+                (right.seconds == left.seconds && right.operations > left.operations)) {
+                EndlessRecord temporary = left;
+                left = right;
+                right = temporary;
+            }
+        }
+    }
+    while (endlessLeaderboard.size() > 10) endlessLeaderboard.pop();
+}
+
+void GameApp::recordEndlessScore() {
+    EndlessRecord record{ endlessScore, endlessOperations, endlessSeed };
+    endlessLeaderboard.push(record);
+    for (int i = 0; i < endlessLeaderboard.size(); i++) {
+        for (int j = i + 1; j < endlessLeaderboard.size(); j++) {
+            EndlessRecord& left = endlessLeaderboard[i];
+            EndlessRecord& right = endlessLeaderboard[j];
+            if (right.seconds > left.seconds ||
+                (right.seconds == left.seconds && right.operations > left.operations)) {
+                EndlessRecord temporary = left;
+                left = right;
+                right = temporary;
+            }
+        }
+    }
+    while (endlessLeaderboard.size() > 10) endlessLeaderboard.pop();
+    saveLeaderboard();
+}
+
+void GameApp::saveLeaderboard() {
+    FILE* file = std::fopen("endless_leaderboard.dat", "w");
+    if (file == nullptr) return;
+    for (int i = 0; i < endlessLeaderboard.size(); i++) {
+        EndlessRecord& record = endlessLeaderboard[i];
+        std::fprintf(file, "%d %d %d\n", record.seconds, record.operations, record.seed);
+    }
+    std::fclose(file);
 }
 
 void GameApp::loadCurrentLevel() {
@@ -2405,6 +2466,9 @@ void GameApp::processInput() {
             endlessPromptActive = false;
             screenState = 0;
         }
+        else if (screenState == 7) {
+            screenState = 0;
+        }
         return;
     }
 
@@ -2542,6 +2606,9 @@ void GameApp::processInput() {
         }
         else if (CheckCollisionPointRec(mouse, Rectangle{ 490, 468, 300, 58 })) {
             startEndlessRun();
+        }
+        else if (CheckCollisionPointRec(mouse, Rectangle{ 490, 542, 300, 58 })) {
+            screenState = 7;
         }
         return;
     }
@@ -2713,6 +2780,16 @@ void GameApp::processInput() {
             startEndlessRun();
         }
         else if (CheckCollisionPointRec(mouse, Rectangle{ 650, 560, 220, 52 })) {
+            screenState = 0;
+        }
+        else if (CheckCollisionPointRec(mouse, Rectangle{ 500, 630, 260, 48 })) {
+            screenState = 7;
+        }
+        return;
+    }
+
+    if (screenState == 7) {
+        if (CheckCollisionPointRec(mouse, Rectangle{ 500, 700, 240, 48 })) {
             screenState = 0;
         }
         return;
@@ -3260,6 +3337,11 @@ void GameApp::draw() {
         EndDrawing();
         return;
     }
+    if (screenState == 7) {
+        drawLeaderboard();
+        EndDrawing();
+        return;
+    }
 
     DrawText("VAULT HEIST", 24, 22, 30, Color{ 240, 220, 170, 255 });
     DrawText("Tree Lab - GUI mock connected through GameModel", 285, 54, 16,
@@ -3310,7 +3392,8 @@ void GameApp::drawMainMenu() {
     drawButton(Rectangle{ 490, 320, 300, 58 }, "Campaign", true);
     drawButton(Rectangle{ 490, 394, 300, 58 }, "Sandbox", true);
     drawButton(Rectangle{ 490, 468, 300, 58 }, "Endless survival", true);
-    DrawText("Choose a mode to enter the vault.", 474, 550, 18,
+    drawButton(Rectangle{ 490, 542, 300, 58 }, "Leaderboard", true);
+    DrawText("Choose a mode to enter the vault.", 474, 630, 18,
         Color{ 150, 165, 185, 255 });
     if (levelManager.count() == 0) {
         DrawText("Level data failed to load: data/levels.json", 390, 595, 18,
@@ -3377,6 +3460,27 @@ void GameApp::drawEndlessResult() {
         Color{ 150, 165, 185, 255 });
     drawButton(Rectangle{ 390, 560, 220, 52 }, "Play again", true);
     drawButton(Rectangle{ 650, 560, 220, 52 }, "Main menu", true);
+    drawButton(Rectangle{ 500, 630, 260, 48 }, "View leaderboard", true);
+}
+
+void GameApp::drawLeaderboard() {
+    DrawText("ENDLESS LEADERBOARD", 360, 96, 36, Color{ 240, 220, 170, 255 });
+    DrawText("Rank     Time       Operations      Seed", 360, 170, 18,
+        Color{ 150, 175, 205, 255 });
+    if (endlessLeaderboard.empty()) {
+        DrawText("No runs recorded yet. Play Endless survival to set a score.",
+            330, 230, 18, Color{ 205, 212, 224, 255 });
+    }
+    for (int i = 0; i < endlessLeaderboard.size(); i++) {
+        EndlessRecord& record = endlessLeaderboard[i];
+        DrawText(TextFormat("%2i       %3i sec          %3i           %i",
+            i + 1, record.seconds, record.operations, record.seed),
+            360, 212 + i * 42, 18,
+            i == 0 ? Color{ 240, 220, 170, 255 } : Color{ 220, 224, 230, 255 });
+    }
+    DrawText("Scores rank by survival time, then valid operations.", 360, 650, 16,
+        Color{ 150, 165, 185, 255 });
+    drawButton(Rectangle{ 500, 700, 240, 48 }, "Main menu", true);
 }
 
 void GameApp::drawSandbox() {
