@@ -10,7 +10,7 @@ namespace {
 
         void skipSpaces() {
             while (position < (int)source.size() &&
-                   (source[position] == ' ' || source[position] == '\n' ||
+                (source[position] == ' ' || source[position] == '\n' ||
                     source[position] == '\r' || source[position] == '\t')) {
                 position++;
             }
@@ -45,10 +45,12 @@ namespace {
                     else if (escaped == 't') output += '\t';
                     else if (escaped == '"' || escaped == '\\' || escaped == '/') {
                         output += escaped;
-                    } else {
+                    }
+                    else {
                         return false;
                     }
-                } else {
+                }
+                else {
                     output += ch;
                 }
             }
@@ -61,7 +63,7 @@ namespace {
             if (position < (int)source.size() && source[position] == '-') position++;
             int digitsStart = position;
             while (position < (int)source.size() && source[position] >= '0' &&
-                   source[position] <= '9') {
+                source[position] <= '9') {
                 position++;
             }
             if (position == digitsStart) return false;
@@ -121,34 +123,46 @@ namespace {
                 if (key == "act") {
                     if (!readInteger(level.act)) return false;
                     requiredFields |= 1;
-                } else if (key == "number") {
+                }
+                else if (key == "number") {
                     if (!readInteger(level.number)) return false;
                     requiredFields |= 2;
-                } else if (key == "scenarioId") {
+                }
+                else if (key == "scenarioId") {
                     if (!readInteger(level.scenarioId)) return false;
-                } else if (key == "targetValue") {
+                }
+                else if (key == "targetValue") {
                     if (!readInteger(level.targetValue)) return false;
-                } else if (key == "rangeLow") {
+                }
+                else if (key == "rangeLow") {
                     if (!readInteger(level.rangeLow)) return false;
-                } else if (key == "rangeHigh") {
+                }
+                else if (key == "rangeHigh") {
                     if (!readInteger(level.rangeHigh)) return false;
-                } else if (key == "optimalSteps") {
+                }
+                else if (key == "optimalSteps") {
                     if (!readInteger(level.optimalSteps)) return false;
-                } else if (key == "alarmCapacity") {
+                }
+                else if (key == "alarmCapacity") {
                     if (!readInteger(level.alarmCapacity)) return false;
-                } else if (key == "implemented") {
+                }
+                else if (key == "implemented") {
                     if (!readBoolean(level.implemented)) return false;
                     requiredFields |= 4;
-                } else if (key == "title") {
+                }
+                else if (key == "title") {
                     if (!readString(level.title)) return false;
                     requiredFields |= 8;
-                } else if (key == "concept") {
+                }
+                else if (key == "concept") {
                     if (!readString(level.conceptName)) return false;
                     requiredFields |= 16;
-                } else if (key == "objective") {
+                }
+                else if (key == "objective") {
                     if (!readString(level.objective)) return false;
                     requiredFields |= 32;
-                } else if (!skipScalar()) {
+                }
+                else if (!skipScalar()) {
                     return false;
                 }
 
@@ -188,7 +202,8 @@ namespace {
                             if (!take(',')) return false;
                         }
                     }
-                } else if (!skipScalar()) {
+                }
+                else if (!skipScalar()) {
                     return false;
                 }
 
@@ -282,7 +297,7 @@ bool LevelManager::saveProgress(std::string filePath) {
     output << levels.size() << "\n";
     for (int i = 0; i < levels.size(); i++) {
         output << levels[i].act << " " << levels[i].number << " "
-               << earnedStars[i] << " " << bestScores[i] << "\n";
+            << earnedStars[i] << " " << bestScores[i] << "\n";
     }
     return output.good();
 }
@@ -306,8 +321,14 @@ bool LevelManager::isUnlocked(int index) {
     if (index < 0 || index >= levels.size() || !levels[index].implemented) {
         return false;
     }
-    if (index == 0) return true;
-    return earnedStars[index - 1] > 0;
+    // A level unlocks when the closest earlier *implemented* level has stars.
+    // Unfinished (locked) levels in between do not block the campaign.
+    for (int previous = index - 1; previous >= 0; previous--) {
+        if (levels[previous].implemented) {
+            return earnedStars[previous] > 0;
+        }
+    }
+    return true;
 }
 
 bool LevelManager::isCompleted(int index) {

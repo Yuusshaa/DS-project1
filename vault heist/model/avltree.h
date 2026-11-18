@@ -113,7 +113,7 @@ public:
 
     // EV_ROTATE: N = the room that was out of balance, O = the room that becomes
     //            the new top, Code = ROT_LL / ROT_RR / ROT_LR / ROT_RL.
-    // EV_BALANCE_ALERT: N = room, V = balance factor.
+    // EV_BALANCE_ALERT: N = room, V = balance factor, Code = rotation case.
     TreeNode* rebalance(TreeNode* node, EventLog& log) {
         updateNode(node, log);
         int bf = balanceFactorOf(node);
@@ -122,7 +122,11 @@ public:
             return node;
         }
 
-        record(log, EV_BALANCE_ALERT, node->id, -1, bf, 0, "Out of balance");
+        int rotationCase = bf > 1
+            ? (balanceFactorOf(node->left) < 0 ? ROT_LR : ROT_LL)
+            : (balanceFactorOf(node->right) > 0 ? ROT_RL : ROT_RR);
+        record(log, EV_BALANCE_ALERT, node->id, -1, bf, rotationCase,
+               "Out of balance");
 
         TreeNode* top = node;
         if (bf > 1) {
@@ -195,7 +199,8 @@ public:
             record(log, EV_VISIT, current->id, -1, current->value, 0, "Visit room");
             int leftSize = sizeOf(current->left);
             if (k == leftSize + 1) {
-                record(log, EV_DONE, -1, -1, 0, 0, "Found k-th");
+                record(log, EV_DONE, current->id, -1, current->value, 0,
+                       "Found k-th");
                 return current;
             }
             if (k <= leftSize) {

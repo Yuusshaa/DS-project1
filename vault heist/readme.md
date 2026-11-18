@@ -5,55 +5,57 @@ visualizes binary trees, BSTs, AVL trees, Max Heaps, and Heap Sort.
 
 ## Current status
 
-The GUI now constructs `RealGameModel`. The model exposes the agreed action
-codes and currently implements the Act 1 height, LCA, and mirror actions, plus
-scenarios 12, 13, 25, and 31. Other planned actions are being integrated in
-stages; see [docs/CONTRACT.md](./docs/CONTRACT.md) for the shared contract.
+The GUI is wired to `RealGameModel` and includes all 20 campaign levels,
+Endless mode, leaderboard, and the expanded Sandbox with undo/redo. The real
+model supports the campaign fixtures and actions, including AVL insertion
+predictions, order statistics, and heap operations. Automated tests and a
+native build are used for validation; a complete manual play-through is still
+recommended before presenting the game.
 
 ## Build setup
 
-- Visual Studio Community 2026
-- x64 platform
-- C++20
-- Raylib 6.2.0 from the existing vcpkg installation
-- No CMake
-
-The project currently expects Raylib here:
-
-```text
-E:\vcpkg\installed\x64-windows
-```
-
-If Raylib is installed elsewhere, edit `RaylibRoot` in `VaultHeist.vcxproj`.
+- The VS Code build task uses GCC, C++17, and Raylib.
+- The task currently expects the Raylib distribution at `C:\raylib`.
+- No CMake is required.
 
 ## Build and run
 
-1. Open `VaultHeist.slnx` in Visual Studio.
-2. Select **Debug** and **x64** in the toolbar.
-3. Choose **Build > Build Solution** or press **Ctrl+Shift+B**.
-4. Press **F5** to run with the debugger, or **Ctrl+F5** to run without it.
-
-The project copies the Raylib runtime DLLs beside the executable after a
-successful build.
-
-If a command-line build reports `LNK1101` for `MSPDB140.DLL`, open an x64
-Visual Studio Developer Command Prompt in this folder and run:
-
-```text
-msbuild VaultHeist.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64 /p:PreferredToolArchitecture=x64
-```
+In VS Code, run the **build vault heist** task, then launch
+`vault heist/vault_heist_demo.exe` from the workspace root so the relative
+paths to `data/levels.json` and the save files resolve correctly.
 
 ## Controls
 
 - Select **Campaign**, then start level 1.1.
+- Select **Endless survival** to start with an empty BST. Click the requested
+  Insert or Delete button before its timer expires; the prompt pace increases
+  as you survive longer. Three missed operations end the run, and survival
+  time is the score.
+- Open **Leaderboard** to view the ten best Endless runs on this computer.
+  Entries rank by survival time, then valid operations, and are saved in
+  `endless_leaderboard.dat` in the application's working directory.
+- Choose **Save & main menu** during an Endless run to pause it, then select
+  **Continue Endless** to resume. The current BST and run state are saved in
+  `endless_run.dat` in the application's working directory.
 - Click a **Quiz** button to start that traversal challenge, then click rooms
   in the requested order.
 - Click **Search 60** to show a sample BST search path.
 - Click **Reset level** to restore the sample tree and counters.
-- From the main menu, open **Sandbox**, focus the value field, and type an
-  integer. Use Search, Insert, Delete, or Range Query; enter the range high
-  value in the second field. Press Enter to repeat the last operation.
-- Use **Reset demo** in the Sandbox to restore its starting tree.
+- From the main menu, open **Sandbox** and choose Binary, BST, AVL, or Max Heap.
+- Type a seed and choose **Random setup** to create a repeatable setup. The
+  displayed seed can be reused to regenerate it. Binary Tree selects a seeded
+  sample; BST and AVL generate seeded keys; Max Heap uses seeded legal swaps
+  to build a valid heap from its sample values.
+- Use the **Read**, **Edit**, **AVL**, and **Heap** operation pages. The
+  available operations depend on the selected structure; tree tooltips show
+  node IDs for height and LCA queries.
+- In Sandbox, use **Undo** and **Redo** or press **Ctrl+Z** and **Ctrl+Y** to
+  move through the last 20 structure-changing operations. Restoring a tree may
+  assign new node IDs, so the GUI clears any old node selection.
+- Enter operation parameters in the two value fields; for range queries enter
+  the high value second, and for LCA enter the second node ID. Press Enter to
+  repeat the selected operation. **Reset selected structure** restores its
+  starting state.
 - Use **Escape** to return to the previous menu.
 - Close the window to exit.
 

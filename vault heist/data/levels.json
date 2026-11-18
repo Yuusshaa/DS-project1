@@ -1,27 +1,230 @@
 {
   "levels": [
-    {"act": 1, "number": 1, "title": "Patrol Traversal", "concept": "preorder, inorder, postorder, level order", "objective": "Click rooms in the selected traversal order.", "scenarioId": 1, "optimalSteps": 5, "alarmCapacity": 10, "implemented": true},
-    {"act": 1, "number": 2, "title": "Rebuild Blueprint", "concept": "tree reconstruction", "objective": "Reconstruct the hidden tree from traversal orders.", "implemented": false},
-    {"act": 1, "number": 3, "title": "Height and Diameter", "concept": "postorder, height, diameter", "objective": "Find each room's height and the longest path.", "implemented": false},
-    {"act": 1, "number": 4, "title": "Meeting Room", "concept": "LCA and paths", "objective": "Find the lowest common ancestor and path length.", "implemented": false},
-    {"act": 1, "number": 5, "title": "Mirror the Vault", "concept": "tree inversion", "objective": "Mirror the binary tree.", "implemented": false},
+    {
+      "act": 1,
+      "number": 1,
+      "title": "Patrol Traversal",
+      "concept": "preorder, inorder, postorder, level order",
+      "objective": "Click rooms in the selected traversal order.",
+      "scenarioId": 1,
+      "optimalSteps": 5,
+      "alarmCapacity": 10,
+      "implemented": true
+    },
+    {
+      "act": 1,
+      "number": 2,
+      "title": "Rebuild Blueprint",
+      "concept": "tree reconstruction",
+      "objective": "Reconstruct two hidden trees from preorder plus inorder, then postorder plus inorder.",
+      "scenarioId": 14,
+      "optimalSteps": 13,
+      "alarmCapacity": 22,
+      "implemented": true
+    },
+    {
+      "act": 1,
+      "number": 3,
+      "title": "Height and Diameter",
+      "concept": "postorder, height, diameter",
+      "objective": "Enter every room's height in postorder, then report the diameter.",
+      "scenarioId": 13,
+      "implemented": true
+    },
+    {
+      "act": 1,
+      "number": 4,
+      "title": "Meeting Room",
+      "concept": "LCA and paths",
+      "objective": "Find the lowest common ancestor and path length.",
+      "scenarioId": 13,
+      "implemented": true
+    },
+    {
+      "act": 1,
+      "number": 5,
+      "title": "Mirror the Vault",
+      "concept": "tree inversion",
+      "objective": "Mirror the binary tree.",
+      "scenarioId": 13,
+      "optimalSteps": 1,
+      "alarmCapacity": 3,
+      "implemented": true
+    },
 
-    {"act": 2, "number": 1, "title": "Search Heist", "concept": "BST search", "objective": "Follow each comparison to find treasure 60.", "scenarioId": 2, "targetValue": 60, "optimalSteps": 3, "alarmCapacity": 7, "implemented": true},
-    {"act": 2, "number": 2, "title": "Stash Loot", "concept": "BST insertion", "objective": "Follow the comparison path to insert treasure 65.", "scenarioId": 2, "targetValue": 65, "optimalSteps": 3, "alarmCapacity": 7, "implemented": true},
-    {"act": 2, "number": 3, "title": "Steal and Collapse", "concept": "BST deletion", "objective": "Identify the two-child case, then delete treasure 70.", "scenarioId": 2, "targetValue": 70, "optimalSteps": 2, "alarmCapacity": 5, "implemented": true},
-    {"act": 2, "number": 4, "title": "Range Raid", "concept": "BST range query", "objective": "Find keys 60 through 70 while pruning subtrees.", "scenarioId": 2, "rangeLow": 60, "rangeHigh": 70, "optimalSteps": 2, "alarmCapacity": 5, "implemented": true},
-    {"act": 2, "number": 5, "title": "Lazy Architect", "concept": "BST degeneration", "objective": "Search treasure 70 in a corridor formed by sorted deliveries.", "scenarioId": 25, "targetValue": 70, "optimalSteps": 7, "alarmCapacity": 13, "implemented": true},
+    {
+      "act": 2,
+      "number": 1,
+      "title": "Search Heist",
+      "concept": "BST search",
+      "objective": "Follow each comparison to find treasure 60.",
+      "scenarioId": 2,
+      "targetValue": 60,
+      "optimalSteps": 3,
+      "alarmCapacity": 7,
+      "implemented": true
+    },
+    {
+      "act": 2,
+      "number": 2,
+      "title": "Stash Loot",
+      "concept": "BST insertion",
+      "objective": "Follow the comparison path to insert treasure 65.",
+      "scenarioId": 2,
+      "targetValue": 65,
+      "optimalSteps": 3,
+      "alarmCapacity": 7,
+      "implemented": true
+    },
+    {
+      "act": 2,
+      "number": 3,
+      "title": "Steal and Collapse",
+      "concept": "BST deletion",
+      "objective": "Identify the two-child case, then delete treasure 70.",
+      "scenarioId": 2,
+      "targetValue": 70,
+      "optimalSteps": 2,
+      "alarmCapacity": 5,
+      "implemented": true
+    },
+    {
+      "act": 2,
+      "number": 4,
+      "title": "Range Raid",
+      "concept": "BST range query",
+      "objective": "Find keys 60 through 70 while pruning subtrees.",
+      "scenarioId": 2,
+      "rangeLow": 60,
+      "rangeHigh": 70,
+      "optimalSteps": 2,
+      "alarmCapacity": 5,
+      "implemented": true
+    },
+    {
+      "act": 2,
+      "number": 5,
+      "title": "Lazy Architect",
+      "concept": "BST degeneration",
+      "objective": "Search treasure 70 in a corridor formed by sorted deliveries.",
+      "scenarioId": 25,
+      "targetValue": 70,
+      "optimalSteps": 7,
+      "alarmCapacity": 13,
+      "implemented": true
+    },
 
-    {"act": 3, "number": 1, "title": "Read the Badges", "concept": "AVL balance factor", "objective": "Identify every room with a balance factor outside -1 to 1.", "scenarioId": 31, "optimalSteps": 2, "alarmCapacity": 5, "implemented": true},
-    {"act": 3, "number": 2, "title": "Single Rotations", "concept": "LL and RR rotations", "objective": "Choose the pivot and repair the tree.", "implemented": false},
-    {"act": 3, "number": 3, "title": "Double Rotations", "concept": "LR and RL rotations", "objective": "Identify and perform the two rotations.", "implemented": false},
-    {"act": 3, "number": 4, "title": "Auto Balance", "concept": "AVL insertion", "objective": "Predict and observe automatic rebalancing.", "implemented": false},
-    {"act": 3, "number": 5, "title": "Order Statistic Heist", "concept": "subtree size, kth, rank", "objective": "Find the requested order statistic.", "implemented": false},
+    {
+      "act": 3,
+      "number": 1,
+      "title": "Read the Badges",
+      "concept": "AVL balance factor",
+      "objective": "Identify every room with a balance factor outside -1 to 1.",
+      "scenarioId": 31,
+      "optimalSteps": 2,
+      "alarmCapacity": 5,
+      "implemented": true
+    },
+    {
+      "act": 3,
+      "number": 2,
+      "title": "Single Rotations",
+      "concept": "LL and RR rotations",
+      "objective": "Choose the pivot and repair the tree.",
+      "scenarioId": 31,
+      "optimalSteps": 4,
+      "alarmCapacity": 8,
+      "implemented": true
+    },
+    {
+      "act": 3,
+      "number": 3,
+      "title": "Double Rotations",
+      "concept": "LR and RL rotations",
+      "objective": "Identify and perform the two rotations.",
+      "scenarioId": 33,
+      "optimalSteps": 6,
+      "alarmCapacity": 11,
+      "implemented": true
+    },
+    {
+      "act": 3,
+      "number": 4,
+      "title": "Auto Balance",
+      "concept": "AVL insertion",
+      "objective": "Predict whether each AVL insertion causes no rotation or an LL, RR, LR, or RL repair.",
+      "scenarioId": 39,
+      "optimalSteps": 5,
+      "alarmCapacity": 10,
+      "implemented": true
+    },
+    {
+      "act": 3,
+      "number": 5,
+      "title": "Order Statistic Heist",
+      "concept": "subtree size, kth, rank",
+      "objective": "Use subtree sizes to find the 5th smallest key, then review its rank.",
+      "scenarioId": 3,
+      "optimalSteps": 4,
+      "alarmCapacity": 10,
+      "implemented": true
+    },
 
-    {"act": 4, "number": 1, "title": "Activate the Vault", "concept": "Max Heap construction", "objective": "Build a valid Max Heap.", "implemented": false},
-    {"act": 4, "number": 2, "title": "Repair Security Locks", "concept": "heapify", "objective": "Restore the heap property.", "implemented": false},
-    {"act": 4, "number": 3, "title": "Extract the Greatest", "concept": "extract max", "objective": "Extract each maximum and restore the heap.", "implemented": false},
-    {"act": 4, "number": 4, "title": "Race the Guards", "concept": "Heap Sort", "objective": "Complete heap sort under the alarm limit.", "implemented": false},
-    {"act": 4, "number": 5, "title": "Final Vault", "concept": "complete Heap Sort", "objective": "Sort a new array in ascending order.", "implemented": false}
+    {
+      "act": 4,
+      "number": 1,
+      "title": "Activate the Vault",
+      "concept": "Max Heap construction",
+      "objective": "Build a max heap by swapping a parent only with its larger child.",
+      "scenarioId": 4,
+      "optimalSteps": 4,
+      "alarmCapacity": 8,
+      "implemented": true
+    },
+    {
+      "act": 4,
+      "number": 2,
+      "title": "Repair Security Locks",
+      "concept": "heapify",
+      "objective": "Identify the violating parent and sift its value down to restore heap order.",
+      "scenarioId": 5,
+      "targetValue": 0,
+      "optimalSteps": 1,
+      "alarmCapacity": 4,
+      "implemented": true
+    },
+    {
+      "act": 4,
+      "number": 3,
+      "title": "Extract the Greatest",
+      "concept": "extract max",
+      "objective": "Extract each maximum, restore the active heap, and fill the sorted region.",
+      "scenarioId": 6,
+      "optimalSteps": 7,
+      "alarmCapacity": 13,
+      "implemented": true
+    },
+    {
+      "act": 4,
+      "number": 4,
+      "title": "Race the Guards",
+      "concept": "heap build, extract-max, heap sort",
+      "objective": "Build a max heap, then extract every maximum before the 60-second timer and alarm limit expire.",
+      "scenarioId": 7,
+      "optimalSteps": 8,
+      "alarmCapacity": 12,
+      "implemented": true
+    },
+    {
+      "act": 4,
+      "number": 5,
+      "title": "Final Vault",
+      "concept": "complete Heap Sort",
+      "objective": "Independently heap-sort a new array with duplicates and negative values.",
+      "scenarioId": 8,
+      "optimalSteps": 10,
+      "alarmCapacity": 17,
+      "implemented": true
+    }
   ]
 }
